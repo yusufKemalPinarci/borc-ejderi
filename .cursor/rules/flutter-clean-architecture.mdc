@@ -1,0 +1,32 @@
+---
+description: Flutter clean architecture + Riverpod (awesome-cursorrules adapted)
+globs: "**/*.dart"
+alwaysApply: true
+---
+
+# Flutter / Dart
+
+Kaynak: [PatrickJS/awesome-cursorrules](https://github.com/PatrickJS/awesome-cursorrules)
+(flutter-app-expert, flutter-development-guidelines, flutter-riverpod, clean-code)
+
+## Mimari
+- Feature-first: `lib/features/<feature>/{data,domain,presentation}`
+- Core: `lib/core/{theme,constants,utils}`
+- State: **Riverpod** (ViewModel / Notifier)
+- Offline-first: local persistence, sync opsiyonel
+
+## Dart stili
+- `snake_case` dosya/klasör; `PascalCase` sınıf; `camelCase` üye
+- Import sırası: `dart:` → `package:` → relative
+- `const` constructor tercih et; gereksiz StatefulWidget kullanma
+- Magic number yok; isimli sabit kullan
+- Tek sorumluluk; kısa fonksiyonlar
+
+## UI
+- Material 3 + proje `ThemeData`
+- Türkçe metinler kullanıcıya dönük
+- Oyun UI: tek net aksiyon/ekran; kart yığını değil
+
+## Yasak
+- CrewAI / harici LLM API key entegre etme
+- Online zorunlu özellik ekleme (core loop offline kalmalı)

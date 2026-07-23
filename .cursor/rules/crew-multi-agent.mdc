@@ -1,0 +1,24 @@
+---
+description: Yerel CrewAI-benzeri multi-agent orkestrasyon (API'siz)
+globs: "lib/crew/**/*.dart,agents/**/*"
+alwaysApply: false
+---
+
+# Yerel Crew (CrewAI pattern, API yok)
+
+CrewAI kavramları (Agent, Task, Crew, sequential process) yerel ve deterministik.
+
+## Primitifler
+- `Agent`: role, goal, backstory, `execute(task, context)`
+- `Task`: description, expectedOutput, assignedAgent, contextKeys
+- `Crew`: agents + tasks + `Process.sequential` | `hierarchical`
+- `CrewContext`: agent çıktılarını zincirler (`context['analyst']` vb.)
+
+## Kurallar
+- Harici LLM / CrewAI cloud / API key **yok**
+- Agentlar şablon + kural motoru ile çalışır
+- Yeni agent eklerken aynı `Agent` arayüzünü uygula
+- `kickoff()` çıktısı UI'ya `CrewResult` olarak gider
+
+## Geliştirme agentları (`agents/`)
+Cursor tarafında Product / Design / Flutter / QA agentları aynı crew modeliyle işbirliği yapar; uygulama runtime'ından ayrıdır.

@@ -1,0 +1,25 @@
+---
+description: Borç Ejderi RPG oyun tasarımı ve domain kuralları
+globs: "lib/**/*.dart"
+alwaysApply: true
+---
+
+# Borç Ejderi
+
+Offline birikim / borç bitirme RPG. Metafor: borç = ejderha HP; ödeme/birikim = hasar + XP.
+
+## Core loop
+1. Oyuncu borç/hedef tanımlar (ejderha spawn)
+2. Günlük questleri tamamlar veya ödeme kaydeder
+3. Hasar uygulanır → loot / XP / seviye
+4. Ejderha ölünce yeni bölüm / birikim boss
+
+## Oyun kuralları
+- 1 TL ödeme/birikim ≈ 1 hasar (ölçeklenebilir)
+- Streak: art arda gün kayıt → çarpan
+- Ceza yok (HP kaybı yok); motivasyon pozitif
+- Kozmetik / unvan unlock (ileride IAP)
+
+## Multi-agent (yerel Crew)
+`lib/crew/` — CrewAI benzeri, **API key yok**.
+Agentlar sırayla bağlam paylaşır: Analyst → Quest → Battle → Lore → Coach.

@@ -1,0 +1,11 @@
+{
+  "name": "borc-ejderi-dev-crew",
+  "process": "sequential",
+  "agents": [
+    "product_agent",
+    "game_design_agent",
+    "flutter_agent",
+    "qa_agent"
+  ],
+  "notes": "CrewAI pattern locally. No API keys. Runtime agents live in lib/crew/."
+}
