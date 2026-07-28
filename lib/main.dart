@@ -4,8 +4,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'core/theme/app_theme.dart';
 import 'features/game/presentation/game_controller.dart';
-import 'features/game/presentation/screens/home_screen.dart';
 import 'features/game/presentation/screens/onboarding_screen.dart';
+import 'features/game/presentation/screens/shell_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -38,7 +38,7 @@ class BorcEjderiApp extends ConsumerWidget {
         ),
         error: (e, _) => Scaffold(body: Center(child: Text('$e'))),
         data: (state) =>
-            state.onboarded ? const HomeScreen() : const OnboardingScreen(),
+            state.onboarded ? const ShellScreen() : const OnboardingScreen(),
       ),
     );
   }

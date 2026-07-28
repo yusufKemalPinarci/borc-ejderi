@@ -1,67 +1,76 @@
 import '../crew_core.dart';
 
-/// Analist çıktısına göre günlük quest üretir.
+/// Undebt.it tarzı günlük aksiyonlar: odak borç, ekstra ödeme, kayıt.
 class QuestAgent implements Agent {
   @override
   String get role => 'quest';
 
   @override
-  String get goal => 'Ulaşılabilir, oyunlaştırılmış günlük görevler üret';
+  String get goal => 'Odak borca ödeme + birikim + harcama kaydı';
 
   @override
   String get backstory =>
-      'RPG quest yazarı. Küçük zaferleri büyük hissettirir.';
+      'Borç planı koçu. Önce odak borcu bitir, sonra birikim.';
 
   @override
   AgentOutput execute(AgentTask task, CrewContext context) {
     final a = context['analyst']?.payload ?? {};
+    final inputs = context['inputs']?.payload ?? {};
     final suggested = (a['suggestedDaily'] as num?)?.toDouble() ?? 100;
-    final risk = a['risk'] as String? ?? 'orta';
     final streak = (a['streak'] as num?)?.toInt() ?? 0;
+    final wallet = (inputs['wallet'] as num?)?.toDouble() ?? 0;
+    final focusName = inputs['focusDebtName'] as String? ?? 'odak borç';
+    final strategyLabel = inputs['strategyLabel'] as String? ?? 'Kartopu';
+
+    final payAmount = wallet > 0
+        ? suggested.clamp(50, wallet).toDouble()
+        : suggested;
+    final saveAmount = (payAmount * 0.4).clamp(20, 500).toDouble();
 
     final quests = <Map<String, dynamic>>[
       {
         'id': 'pay_daily',
-        'title': 'Günlük Darbe',
+        'title': 'Odak borca öde',
         'description':
-            '${suggested.toStringAsFixed(0)} TL öde veya biriktir — ejderhaya hasar ver.',
-        'targetAmount': suggested,
-        'xpReward': 25,
+            '$strategyLabel: $focusName için '
+            '${payAmount.toStringAsFixed(0)} TL öde (1 TL = 1 hasar).',
+        'targetAmount': payAmount,
+        'xpReward': 0,
         'type': 'payment',
       },
       {
-        'id': 'no_impulse',
-        'title': 'Dürtü Kalkanı',
-        'description': 'Bugün gereksiz bir harcamayı iptal et / ertele.',
+        'id': 'save_slice',
+        'title': 'Biraz biriktir',
+        'description':
+            '${saveAmount.toStringAsFixed(0)} TL biriktir '
+            '(${saveAmount.toStringAsFixed(0)} XP).',
+        'targetAmount': saveAmount,
+        'xpReward': 0,
+        'type': 'save',
+      },
+      {
+        'id': 'log_live',
+        'title': 'Harcamayı kaydet',
+        'description': 'Bir yaşam harcamasını yaz — planı güncel tut.',
         'targetAmount': 0,
-        'xpReward': 15,
-        'type': 'habit',
+        'xpReward': 0,
+        'type': 'expense',
       },
       if (streak >= 2)
         {
           'id': 'streak_guard',
-          'title': 'Ateş Zinciri',
-          'description': 'Serini bozma — bugün en az 1 kayıt gir.',
+          'title': 'Bugünü kaçırma',
+          'description': 'Bugün en az 1 ödeme veya kayıt gir.',
           'targetAmount': 1,
-          'xpReward': 20,
+          'xpReward': 0,
           'type': 'streak',
-        },
-      if (risk == 'yuksek')
-        {
-          'id': 'emergency_cut',
-          'title': 'Acil Kesinti',
-          'description':
-              'Bir abonelik veya alışkanlık harcamasını gözden geçir.',
-          'targetAmount': 0,
-          'xpReward': 30,
-          'type': 'review',
         },
     ];
 
     return AgentOutput(
       agentRole: role,
       taskId: task.id,
-      summary: '${quests.length} quest üretildi',
+      summary: '${quests.length} quest',
       payload: {'quests': quests},
     );
   }

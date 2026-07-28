@@ -6,7 +6,14 @@ Borç = ejderha HP. Ödeme / birikim = hasar + XP. Tamamen offline.
 
 ## Crew (CrewAI tarzı, API key yok)
 
-Runtime: `lib/crew/` — Analyst → Quest → Battle → Lore → Coach sırayla çalışır.
+Runtime: `lib/crew/` — aşamaya göre agent zinciri:
+
+| Aşama | Zincir |
+|-------|--------|
+| spawn | Analyst → Quest → Lore → Coach |
+| dailyPlan | Analyst → Quest → Coach |
+| attack | Analyst → Battle → Lore → Coach |
+| victory | Analyst → Lore → Coach |
 
 Geliştirme: `agents/` — Product → Game Design → Flutter → QA.
 

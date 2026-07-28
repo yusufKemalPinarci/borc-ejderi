@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../core/theme/app_theme.dart';
+import '../../domain/models.dart';
 import '../game_controller.dart';
 
 /// Product+Design kararı: vuruş feedback overlay (hit / crit / defeat).
@@ -104,7 +105,7 @@ class _AttackFeedbackOverlayState extends State<AttackFeedbackOverlay>
                         children: [
                           if (result.crit && !result.defeated)
                             Text(
-                              'KRİTİK',
+                              result.snowflake ? 'KAR TANESİ' : 'KRİTİK',
                               style: Theme.of(context)
                                   .textTheme
                                   .headlineMedium
@@ -115,7 +116,9 @@ class _AttackFeedbackOverlayState extends State<AttackFeedbackOverlay>
                             ),
                           if (result.defeated)
                             Text(
-                              'EJDERHA YENİLDİ',
+                              result.targetKind == TargetKind.savings
+                                  ? 'BİRİKİM TAMAM'
+                                  : 'EJDERHA YENİLDİ',
                               style: Theme.of(context)
                                   .textTheme
                                   .headlineMedium
@@ -124,7 +127,9 @@ class _AttackFeedbackOverlayState extends State<AttackFeedbackOverlay>
                             )
                           else
                             Text(
-                              '-${currency.format(result.damage)}',
+                              result.targetKind == TargetKind.savings
+                                  ? '+${currency.format(result.damage)}'
+                                  : '-${currency.format(result.damage)}',
                               style: Theme.of(context)
                                   .textTheme
                                   .displayLarge
@@ -134,13 +139,45 @@ class _AttackFeedbackOverlayState extends State<AttackFeedbackOverlay>
                                   ),
                             ),
                           const SizedBox(height: 8),
-                          Text(
-                            '+${result.xp} XP',
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleLarge
-                                ?.copyWith(color: AppTheme.gold),
-                          ),
+                          if (result.targetKind == TargetKind.savings) ...[
+                            Text(
+                              '+${result.xp} XP  (= ${currency.format(result.damage)})',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleLarge
+                                  ?.copyWith(color: AppTheme.moss),
+                            ),
+                            if (result.leveledUp) ...[
+                              const SizedBox(height: 6),
+                              Text(
+                                'Seviye ${result.newLevel}!',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .headlineMedium
+                                    ?.copyWith(color: AppTheme.gold),
+                              ),
+                            ],
+                          ] else ...[
+                            Text(
+                              result.defeated
+                                  ? 'Borç kapandı! +${result.xp} XP'
+                                  : 'Borca iş verildi',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleLarge
+                                  ?.copyWith(color: AppTheme.ember),
+                            ),
+                            if (result.leveledUp) ...[
+                              const SizedBox(height: 6),
+                              Text(
+                                'Seviye ${result.newLevel}!',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .headlineMedium
+                                    ?.copyWith(color: AppTheme.gold),
+                              ),
+                            ],
+                          ],
                           if (result.defeated) ...[
                             const SizedBox(height: 16),
                             Padding(

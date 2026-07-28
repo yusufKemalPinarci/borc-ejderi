@@ -6,20 +6,42 @@ alwaysApply: true
 
 # Borç Ejderi
 
-Offline birikim / borç bitirme RPG. Metafor: borç = ejderha HP; ödeme/birikim = hasar + XP.
+Offline borç yönetimi RPG (Türkiye).
+
+## Referans app’ler
+| Rol | App | Neden |
+|-----|-----|-------|
+| Borç mantığı | **Debt Payoff Planner** (OxbowSoft, 500K+) | Odak, kartopu/çığ, ödeme, borçsuz tarih |
+| Oyunlaştırma | **Fortune City** (SPARKFUL, 1M+) | Kayıt → görsel ilerleme, streak, günlük dönüş |
+| Hesap motoru esin | Undebt.it (web) | Faiz + rollover simülasyonu |
+
+Hibrit: DPP planı + Fortune City ödül döngüsü.  
+Görsel tema: şehir değil — **kale / ejderha** (offline).
+
+## ABD borç app özellikleri (oyunda)
+1. Borç listesi: bakiye, faiz %, asgari ödeme
+2. Strateji: Kartopu (küçükten) / Çığ (yüksek faizden)
+3. Odak borç + ödeme kaydı + aylık ekstra
+4. Borçsuz tarih / toplam faiz (`PayoffSimulator`)
+5. Manuel giriş — banka sync yok
+
+## Ekranlar
+| Sekme | Tek iş |
+|-------|--------|
+| Savaş | Odak ejderhaya vur |
+| Borçlar | Liste + strateji + plan |
+| Zaferler | Öldürülenler + seviye/güç |
+| Günlük | Nereye harcandı |
 
 ## Core loop
-1. Oyuncu borç/hedef tanımlar (ejderha spawn)
-2. Günlük questleri tamamlar veya ödeme kaydeder
-3. Hasar uygulanır → loot / XP / seviye
-4. Ejderha ölünce yeni bölüm / birikim boss
+1. Hedef ekle → 2. Gelir → kasa → 3. Odak ödeme / birikim / yaşam
+4. 1 TL = 1 hasar veya 1 XP → 5. Bitince sıradaki + kutlama
 
-## Oyun kuralları
-- 1 TL ödeme/birikim ≈ 1 hasar (ölçeklenebilir)
-- Streak: art arda gün kayıt → çarpan
-- Ceza yok (HP kaybı yok); motivasyon pozitif
-- Kozmetik / unvan unlock (ileride IAP)
+## Kurallar (`game_rules.dart`)
+- 1:1 hasar / XP; çarpan yok
+- Crit = görsel; HP cezası yok
+- Faiz plan kehanetinde; savaşta can yakmaz
+- Fortune City’den: kayıt = ödül hissi; sosyal/konum yok
 
-## Multi-agent (yerel Crew)
-`lib/crew/` — CrewAI benzeri, **API key yok**.
-Agentlar sırayla bağlam paylaşır: Analyst → Quest → Battle → Lore → Coach.
+## Multi-agent
+`lib/crew/` — API key yok. `CrewStage`: spawn / dailyPlan / attack / victory.

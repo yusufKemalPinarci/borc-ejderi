@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../../core/constants/game_rules.dart';
 import '../../../crew/debt_crew_service.dart';
 import '../data/game_repository.dart';
 import '../domain/models.dart';
@@ -29,10 +30,9 @@ class GameController extends AsyncNotifier<GameState> {
   @override
   Future<GameState> build() async {
     final loaded = await _repo.load();
-    if (loaded.onboarded &&
-        loaded.dragon != null &&
-        !loaded.dragon!.isDefeated) {
-      return _applyCrew(loaded, attackAmount: 0);
+    final active = loaded.selectedDragon;
+    if (loaded.onboarded && active != null && !active.isDefeated) {
+      return _applyDailyCrew(loaded);
     }
     return loaded;
   }
@@ -43,14 +43,16 @@ class GameController extends AsyncNotifier<GameState> {
   }
 
   String get _today => DateFormat('yyyy-MM-dd').format(DateTime.now());
+  String get _monthKey => DateFormat('yyyy-MM').format(DateTime.now());
 
-  /// Büyük / şüpheli tutar mı? (UI onay için)
   bool needsAttackConfirm(double amount) {
-    final current = state.asData?.value;
-    final dragon = current?.dragon;
+    final dragon = state.asData?.value.selectedDragon;
     if (dragon == null || amount <= 0) return false;
-    if (amount > dragon.currentHp) return true;
-    if (dragon.currentHp > 0 && amount / dragon.currentHp >= 0.4) return true;
+    final remaining = dragon.displayRemaining;
+    if (amount > remaining) return true;
+    if (remaining > 0 && amount / remaining >= GameRules.bigHitRatio) {
+      return true;
+    }
     return false;
   }
 
@@ -58,68 +60,347 @@ class GameController extends AsyncNotifier<GameState> {
     required String heroName,
     required String dragonName,
     required double debtAmount,
+    required double monthlyBudget,
+    TargetKind kind = TargetKind.debt,
+    double interestRate = 0,
+    double minPayment = 0,
   }) async {
+    final budget = monthlyBudget > 0 ? monthlyBudget : 0.0;
     final hero = HeroProfile.fresh(
       heroName.trim().isEmpty ? 'Kahraman' : heroName.trim(),
+      monthlyBudget: budget,
     );
     final dragon = DebtDragon(
-      name: dragonName.trim().isEmpty ? 'Borç Ejderi' : dragonName.trim(),
+      id: _uuid.v4(),
+      name: dragonName.trim().isEmpty
+          ? (kind == TargetKind.savings ? 'Birikim Hedefi' : 'Borç Ejderi')
+          : dragonName.trim(),
+      kind: kind,
       totalHp: debtAmount,
-      currentHp: debtAmount,
+      currentHp: kind == TargetKind.savings ? 0 : debtAmount,
       createdAt: DateTime.now().toIso8601String(),
+      interestRate: kind == TargetKind.debt ? interestRate : 0,
+      minPayment: kind == TargetKind.debt
+          ? (minPayment > 0 ? minPayment : (debtAmount * 0.02).clamp(50, 5000))
+          : 0,
+    );
+    final incomeLog = PaymentLog(
+      id: _uuid.v4(),
+      amount: budget,
+      damage: 0,
+      xp: 0,
+      narrative: 'Aylık gelir yüklendi.',
+      createdAt: DateTime.now().toIso8601String(),
+      targetName: 'Kasa',
+      flow: MoneyFlow.income,
     );
     var next = GameState(
       onboarded: true,
       hero: hero,
-      dragon: dragon,
+      dragons: [dragon],
+      selectedDragonId: dragon.id,
+      budgetMonth: _monthKey,
+      monthIncome: budget,
+      logs: budget > 0 ? [incomeLog] : const [],
+      payoffStrategy: PayoffStrategy.snowball,
     );
-    next = _applyCrew(next, attackAmount: 0);
+    next = _applySpawnCrew(next);
     await _persist(next);
   }
 
-  Future<void> setNewDragon({
-    required String name,
-    required double amount,
+  Future<void> setPayoffStrategy(PayoffStrategy strategy) async {
+    final current = state.asData?.value;
+    if (current == null) return;
+    final focus = current.copyWith(payoffStrategy: strategy).focusDebt;
+    var next = current.copyWith(
+      payoffStrategy: strategy,
+      selectedDragonId: focus?.id ?? current.selectedDragonId,
+    );
+    if (focus != null && !focus.isDefeated) {
+      next = _applyDailyCrew(next);
+    }
+    await _persist(next);
+  }
+
+  /// Asgari üstü aylık ekstra (Undebt.it "extra payment").
+  Future<void> setExtraMonthlyPayment(double? amount) async {
+    final current = state.asData?.value;
+    if (current == null) return;
+    if (amount == null) {
+      await _persist(current.copyWith(clearExtraMonthly: true));
+      return;
+    }
+    await _persist(
+      current.copyWith(extraMonthlyPayment: amount.clamp(0, double.infinity)),
+    );
+  }
+
+  /// Borç / birikim düzenle (isim, bakiye, faiz, asgari).
+  Future<void> updateDragon({
+    required String id,
+    String? name,
+    double? balance,
+    double? totalHp,
+    double? interestRate,
+    double? minPayment,
   }) async {
     final current = state.asData?.value;
     if (current == null) return;
+    final index = current.dragons.indexWhere((d) => d.id == id);
+    if (index < 0) return;
 
-    final withUndo = current.copyWith(
-      undoSnapshot: current.toSnapshotJson(),
-      undoLabel: 'Yeni ejderha çağrısı geri alındı',
+    final d = current.dragons[index];
+    var nextBalance = balance ?? d.currentHp;
+    var nextTotal = totalHp ?? d.totalHp;
+
+    if (d.isDebt) {
+      nextBalance = nextBalance.clamp(0, double.infinity);
+      if (nextBalance > nextTotal) nextTotal = nextBalance;
+    } else {
+      nextTotal = nextTotal.clamp(1, double.infinity);
+      nextBalance = nextBalance.clamp(0, nextTotal);
+    }
+
+    final updated = d.copyWith(
+      name: name?.trim().isEmpty == true ? d.name : (name ?? d.name),
+      currentHp: nextBalance,
+      totalHp: nextTotal,
+      interestRate: d.isDebt ? (interestRate ?? d.interestRate) : 0,
+      minPayment: d.isDebt ? (minPayment ?? d.minPayment) : 0,
     );
+
+    final dragons = [...current.dragons];
+    dragons[index] = updated;
+    var next = current.copyWith(dragons: dragons);
+    if (updated.id == current.selectedDragonId && !updated.isDefeated) {
+      next = _applyDailyCrew(next);
+    }
+    await _persist(next);
+  }
+
+  /// Aylık geliri kasaya ekler. Aynı ayda birikir; ay değişince yeni ay başlar.
+  Future<void> loadMonthlyBudget(double amount) async {
+    final current = state.asData?.value;
+    if (current == null || amount <= 0) return;
+
+    final sameMonth = current.budgetMonth == _monthKey;
+    final hero = current.hero.copyWith(
+      monthlyBudget: amount,
+      wallet: current.hero.wallet + amount,
+    );
+    final log = PaymentLog(
+      id: _uuid.v4(),
+      amount: amount,
+      damage: 0,
+      xp: 0,
+      narrative: sameMonth
+          ? 'Kasaya ek gelir yüklendi.'
+          : 'Yeni ay bütçesi açıldı.',
+      createdAt: DateTime.now().toIso8601String(),
+      targetName: 'Kasa',
+      flow: MoneyFlow.income,
+    );
+    await _persist(
+      current.copyWith(
+        hero: hero,
+        budgetMonth: _monthKey,
+        monthIncome: sameMonth ? current.monthIncome + amount : amount,
+        logs: [log, ...current.logs].take(80).toList(),
+      ),
+    );
+  }
+
+  /// Yaşam harcaması — kasadan düşer, güç vermez.
+  Future<bool> recordLiveExpense({
+    required double amount,
+    String note = '',
+  }) async {
+    final current = state.asData?.value;
+    if (current == null || amount <= 0) return false;
+    if (current.hero.wallet < amount) return false;
+
+    final streaked = _applyStreak(current.hero);
+    var hero = streaked.hero;
+    if (streaked.xp > 0) {
+      hero = _grantXp(hero, streaked.xp);
+    }
+    hero = hero.copyWith(
+      wallet: (hero.wallet - amount).clamp(0, double.infinity).toDouble(),
+    );
+
+    final label = note.trim().isEmpty ? 'Yaşam' : note.trim();
+    final log = PaymentLog(
+      id: _uuid.v4(),
+      amount: amount,
+      damage: 0,
+      xp: 0,
+      narrative: '$label için ${amount.toStringAsFixed(0)} TL harcandı.',
+      createdAt: DateTime.now().toIso8601String(),
+      targetName: label,
+      flow: MoneyFlow.live,
+    );
+
+    final quests = current.quests.map((q) {
+      if (q.completed) return q;
+      if (q.type == 'expense' && amount > 0) {
+        return q.copyWith(completed: true);
+      }
+      if (q.type == 'streak' && amount > 0) {
+        return q.copyWith(completed: true);
+      }
+      return q;
+    }).toList();
+
+    await _persist(
+      current.copyWith(
+        hero: hero,
+        quests: quests,
+        logs: [log, ...current.logs].take(80).toList(),
+        lastNarrative: log.narrative,
+        lastCrewTip:
+            'Harcamayı yazdın. Birikime de iş ver — 1 TL = 1 XP.',
+      ),
+    );
+    return true;
+  }
+
+  /// Kasayı belirli bir tutara ayarlar (düzeltme).
+  Future<void> setWallet(double amount) async {
+    final current = state.asData?.value;
+    if (current == null || amount < 0) return;
+    await _persist(
+      current.copyWith(hero: current.hero.copyWith(wallet: amount)),
+    );
+  }
+
+  Future<void> selectDragon(String id) async {
+    final current = state.asData?.value;
+    if (current == null) return;
+    if (!current.dragons.any((d) => d.id == id)) return;
+    var next = current.copyWith(selectedDragonId: id);
+    final selected = next.selectedDragon;
+    if (selected != null && !selected.isDefeated) {
+      next = _applyDailyCrew(next);
+    }
+    await _persist(next);
+  }
+
+  Future<void> addTarget({
+    required String name,
+    required double amount,
+    required TargetKind kind,
+    double interestRate = 0,
+    double minPayment = 0,
+  }) async {
+    final current = state.asData?.value;
+    if (current == null || amount <= 0) return;
 
     final dragon = DebtDragon(
-      name: name.trim().isEmpty ? 'Borç Ejderi' : name.trim(),
+      id: _uuid.v4(),
+      name: name.trim().isEmpty
+          ? (kind == TargetKind.savings ? 'Birikim' : 'Borç')
+          : name.trim(),
+      kind: kind,
       totalHp: amount,
-      currentHp: amount,
+      currentHp: kind == TargetKind.savings ? 0 : amount,
       createdAt: DateTime.now().toIso8601String(),
+      interestRate: kind == TargetKind.debt ? interestRate : 0,
+      minPayment: kind == TargetKind.debt
+          ? (minPayment > 0 ? minPayment : (amount * 0.02).clamp(50, 5000))
+          : 0,
     );
-    var next = withUndo.copyWith(dragon: dragon);
-    next = _applyCrew(next, attackAmount: 0);
+
+    var next = current.copyWith(
+      dragons: [...current.dragons, dragon],
+      selectedDragonId: dragon.id,
+    );
+    next = _applySpawnCrew(next);
     await _persist(next);
+  }
+
+  /// Eski API — yeni hedef ekler (borç).
+  Future<void> setNewDragon({
+    required String name,
+    required double amount,
+  }) {
+    return addTarget(name: name, amount: amount, kind: TargetKind.debt);
   }
 
   Future<void> refreshCrew() async {
     final current = state.asData?.value;
-    if (current == null || current.dragon == null) return;
-    final next = _applyCrew(current, attackAmount: 0);
+    final dragon = current?.selectedDragon;
+    if (current == null || dragon == null) return;
+    final next = dragon.isDefeated
+        ? _applyVictoryCrew(current)
+        : _applyDailyCrew(current);
     await _persist(next);
   }
 
-  GameState _applyCrew(GameState current, {required double attackAmount}) {
-    final dragon = current.dragon;
+  GameState _applySpawnCrew(GameState current) {
+    final dragon = current.selectedDragon;
     if (dragon == null) return current;
 
-    final result = _crew.runAttack(
+    final result = _crew.runSpawn(
       debtRemaining: dragon.currentHp,
       debtTotal: dragon.totalHp,
       streak: current.hero.streak,
       heroLevel: current.hero.level,
-      attackAmount: attackAmount,
+      targetKind: dragon.kind.name,
+      targetName: dragon.name,
+      wallet: current.hero.wallet,
+      focusDebtName: current.focusDebt?.name ?? dragon.name,
+      strategyLabel: current.payoffStrategy.label,
+    );
+    return _mergeCrewPayload(current, result.finalPayload, mergeQuests: true);
+  }
+
+  GameState _applyDailyCrew(GameState current) {
+    final dragon = current.selectedDragon;
+    if (dragon == null) return current;
+
+    final result = _crew.runDailyPlan(
+      debtRemaining: dragon.currentHp,
+      debtTotal: dragon.totalHp,
+      streak: current.hero.streak,
+      heroLevel: current.hero.level,
+      targetKind: dragon.kind.name,
+      targetName: dragon.name,
+      wallet: current.hero.wallet,
+      focusDebtName: current.focusDebt?.name ?? dragon.name,
+      strategyLabel: current.payoffStrategy.label,
+    );
+    return _mergeCrewPayload(current, result.finalPayload, mergeQuests: true);
+  }
+
+  GameState _applyVictoryCrew(GameState current) {
+    final dragon = current.selectedDragon;
+    if (dragon == null) return current;
+
+    final result = _crew.runVictory(
+      debtTotal: dragon.totalHp,
+      streak: current.hero.streak,
+      heroLevel: current.hero.level,
+      targetKind: dragon.kind.name,
+      targetName: dragon.name,
+      wallet: current.hero.wallet,
+      focusDebtName: current.focusDebt?.name ?? '',
+      strategyLabel: current.payoffStrategy.label,
+    );
+    return _mergeCrewPayload(current, result.finalPayload, mergeQuests: false);
+  }
+
+  GameState _mergeCrewPayload(
+    GameState current,
+    Map<String, dynamic> payload, {
+    required bool mergeQuests,
+  }) {
+    var next = current.copyWith(
+      lastCrewTip: payload['tip'] as String? ?? current.lastCrewTip,
+      lastNarrative: payload['narrative'] as String? ?? current.lastNarrative,
     );
 
-    final payload = result.finalPayload;
+    if (!mergeQuests) return next;
+
     final questMaps = payload['quests'] as List? ?? [];
     final existingDone = {
       for (final q in current.quests.where((e) => e.completed)) q.id,
@@ -131,53 +412,104 @@ class GameController extends AsyncNotifier<GameState> {
       return q.copyWith(completed: existingDone.contains(q.id));
     }).toList();
 
-    return current.copyWith(
-      quests: quests,
-      lastCrewTip: payload['tip'] as String? ?? current.lastCrewTip,
-      lastNarrative: payload['narrative'] as String? ?? current.lastNarrative,
-    );
+    return next.copyWith(quests: quests);
   }
 
-  Future<AttackResult?> attack(double amount) async {
+  /// Kasada yeterli para var mı?
+  bool canAfford(double amount) {
+    final wallet = state.asData?.value.hero.wallet ?? 0;
+    return amount > 0 && wallet >= amount;
+  }
+
+  /// Odak borca / birikime ödeme.
+  /// [snowflake] = Debt Payoff Planner tek seferlik ekstra (ikramiye vb.).
+  Future<AttackResult?> attack(
+    double amount, {
+    bool snowflake = false,
+  }) async {
     final current = state.asData?.value;
-    if (current == null || current.dragon == null || amount <= 0) return null;
+    final dragon = current?.selectedDragon;
+    if (current == null || dragon == null || amount <= 0) return null;
+    if (dragon.isDefeated) return null;
 
-    final before = current.copyWith(
-      undoSnapshot: current.toSnapshotJson(),
-      undoLabel: 'Son ödeme geri alındı (${amount.toStringAsFixed(0)} TL)',
-    );
+    if (current.hero.wallet < amount) return null;
 
-    final dragon = before.dragon!;
+    final monthsBefore =
+        dragon.isDebt ? current.payoffPlan.months : 0;
+
     final result = _crew.runAttack(
       debtRemaining: dragon.currentHp,
       debtTotal: dragon.totalHp,
-      streak: before.hero.streak,
-      heroLevel: before.hero.level,
+      streak: current.hero.streak,
+      heroLevel: current.hero.level,
       attackAmount: amount,
+      targetKind: dragon.kind.name,
+      targetName: dragon.name,
+      wallet: current.hero.wallet,
+      focusDebtName: current.focusDebt?.name ?? dragon.name,
+      strategyLabel: current.payoffStrategy.label,
     );
 
     final battle = Map<String, dynamic>.from(
       result.finalPayload['battle'] as Map? ?? {},
     );
-    final damage = (battle['damage'] as num?)?.toDouble() ?? amount;
-    final xpGain = battle['xp'] as int? ?? amount.round();
-    final narrative = result.finalPayload['narrative'] as String? ?? '';
+    var damage = (battle['damage'] as num?)?.toDouble() ?? amount;
+    damage = damage.clamp(0, current.hero.wallet).toDouble();
+
+    final updatedDragon = dragon.isSavings
+        ? dragon.copyWith(
+            currentHp: (dragon.currentHp + damage).clamp(0, dragon.totalHp),
+          )
+        : dragon.copyWith(
+            currentHp: (dragon.currentHp - damage).clamp(0, dragon.totalHp),
+          );
+
+    final justCleared = updatedDragon.isDefeated && !dragon.isDefeated;
+
+    var xpGain = 0;
+    if (dragon.isSavings) {
+      xpGain = (damage * GameRules.xpPerSavedLira).round();
+      if (justCleared) xpGain += GameRules.savingsClearBonusXp;
+    } else if (justCleared) {
+      xpGain = GameRules.debtClearBonusXp;
+    }
+
+    var narrative = result.finalPayload['narrative'] as String? ?? '';
     final tip = result.finalPayload['tip'] as String? ?? '';
+    final crit = (battle['crit'] as bool?) ?? (justCleared || snowflake);
 
-    final newHp = (dragon.currentHp - damage).clamp(0, dragon.totalHp);
-    final updatedDragon = dragon.copyWith(currentHp: newHp.toDouble());
+    if (snowflake && dragon.isDebt) {
+      narrative =
+          'Kar tanesi! ${damage.toStringAsFixed(0)} TL tek seferlik ekstra. $narrative';
+    }
 
-    var hero = _applyStreak(before.hero);
-    hero = _grantXp(hero, xpGain);
+    final levelBefore = current.hero.level;
+    final streaked = _applyStreak(current.hero);
+    var hero = streaked.hero;
+    final streakXp = streaked.xp;
+    xpGain += streakXp;
 
-    final quests = before.quests.map((q) {
+    hero = hero.copyWith(
+      wallet: (hero.wallet - damage).clamp(0, double.infinity).toDouble(),
+      savedTotal: dragon.isSavings ? hero.savedTotal + damage : hero.savedTotal,
+    );
+    if (xpGain > 0) {
+      hero = _grantXp(hero, xpGain);
+    }
+
+    final quests = current.quests.map((q) {
       if (q.completed) return q;
-      if (q.type == 'payment' && amount >= q.targetAmount) {
-        hero = _grantXp(hero, q.xpReward);
+      if (q.type == 'payment' &&
+          dragon.isDebt &&
+          amount >= q.targetAmount) {
+        return q.copyWith(completed: true);
+      }
+      if (q.type == 'save' &&
+          dragon.isSavings &&
+          amount >= q.targetAmount) {
         return q.copyWith(completed: true);
       }
       if (q.type == 'streak' && amount > 0) {
-        hero = _grantXp(hero, q.xpReward);
         return q.copyWith(completed: true);
       }
       return q;
@@ -185,32 +517,56 @@ class GameController extends AsyncNotifier<GameState> {
 
     final log = PaymentLog(
       id: _uuid.v4(),
-      amount: amount,
+      amount: damage,
       damage: damage,
       xp: xpGain,
       narrative: narrative,
       createdAt: DateTime.now().toIso8601String(),
+      targetId: dragon.id,
+      targetName: dragon.name,
+      targetKind: dragon.kind,
+      flow: MoneyFlow.fromTarget(dragon.kind),
+      isSnowflake: snowflake && dragon.isDebt,
     );
 
-    var next = before.copyWith(
+    final dragons = current.dragons
+        .map((d) => d.id == updatedDragon.id ? updatedDragon : d)
+        .toList();
+
+    var next = current.copyWith(
       hero: hero,
-      dragon: updatedDragon,
-      logs: [log, ...before.logs].take(50).toList(),
+      dragons: dragons,
+      selectedDragonId: updatedDragon.id,
+      logs: [log, ...current.logs].take(80).toList(),
       quests: quests,
       lastNarrative: narrative,
       lastCrewTip: tip,
     );
 
-    next = _applyCrew(next, attackAmount: 0);
+    next = updatedDragon.isDefeated
+        ? _applyVictoryCrew(next)
+        : _applyDailyCrew(next);
     await _persist(next);
+
+    final monthsAfter =
+        dragon.isDebt ? next.payoffPlan.months : 0;
+    final monthsSaved =
+        dragon.isDebt ? (monthsBefore - monthsAfter).clamp(0, 600) : 0;
 
     return AttackResult(
       damage: damage,
       xp: xpGain,
       narrative: narrative,
       defeated: updatedDragon.isDefeated,
-      crit: battle['crit'] as bool? ?? false,
+      crit: crit,
       stamp: DateTime.now().microsecondsSinceEpoch,
+      targetKind: dragon.kind,
+      walletLeft: hero.wallet,
+      leveledUp: hero.level > levelBefore,
+      newLevel: hero.level,
+      snowflake: snowflake && dragon.isDebt,
+      monthsSaved: monthsSaved,
+      streakBonusXp: streakXp,
     );
   }
 
@@ -225,67 +581,53 @@ class GameController extends AsyncNotifier<GameState> {
         break;
       }
     }
-    if (quest == null || quest.completed || quest.type == 'payment') return;
+    if (quest == null ||
+        quest.completed ||
+        quest.type == 'payment' ||
+        quest.type == 'save') {
+      return;
+    }
 
-    final before = current.copyWith(
-      undoSnapshot: current.toSnapshotJson(),
-      undoLabel: 'Quest geri alındı: ${quest.title}',
-    );
-
-    var hero = before.hero;
-    final quests = before.quests.map((q) {
+    final quests = current.quests.map((q) {
       if (q.id != questId || q.completed) return q;
-      hero = _grantXp(_applyStreak(hero), q.xpReward);
       return q.copyWith(completed: true);
     }).toList();
 
-    final next = before.copyWith(hero: hero, quests: quests);
-    await _persist(next);
+    final streaked = _applyStreak(current.hero);
+    var hero = streaked.hero;
+    if (streaked.xp > 0) {
+      hero = _grantXp(hero, streaked.xp);
+    }
+    await _persist(current.copyWith(hero: hero, quests: quests));
   }
 
-  /// Son aksiyonu geri alır. Yoksa false.
-  Future<bool> undoLast() async {
-    final current = state.asData?.value;
-    final snap = current?.undoSnapshot;
-    if (current == null || snap == null) return false;
-
-    final restored = GameState.fromJson(snap).copyWith(clearUndo: true);
-    final refreshed = restored.dragon != null && !restored.dragon!.isDefeated
-        ? _applyCrew(restored, attackAmount: 0)
-        : restored;
-    await _persist(refreshed);
-    return true;
-  }
-
-  HeroProfile _applyStreak(HeroProfile hero) {
+  /// Yeni günde ilk kayıt → streak + küçük XP.
+  ({HeroProfile hero, int xp}) _applyStreak(HeroProfile hero) {
     final today = _today;
-    if (hero.lastActiveDay == today) return hero;
+    if (hero.lastActiveDay == today) {
+      return (hero: hero, xp: 0);
+    }
 
     final yesterday = DateFormat('yyyy-MM-dd').format(
       DateTime.now().subtract(const Duration(days: 1)),
     );
     final streak = hero.lastActiveDay == yesterday ? hero.streak + 1 : 1;
-    return hero.copyWith(streak: streak, lastActiveDay: today);
+    return (
+      hero: hero.copyWith(streak: streak, lastActiveDay: today),
+      xp: GameRules.streakDailyXp,
+    );
   }
 
   HeroProfile _grantXp(HeroProfile hero, int amount) {
     var xp = hero.xp + amount;
     var level = hero.level;
     var title = hero.title;
-    while (xp >= level * 100) {
-      xp -= level * 100;
+    while (xp >= GameRules.xpToNextLevel(level)) {
+      xp -= GameRules.xpToNextLevel(level);
       level += 1;
-      title = _titleFor(level);
+      title = GameRules.titleForLevel(level);
     }
     return hero.copyWith(xp: xp, level: level, title: title);
-  }
-
-  String _titleFor(int level) {
-    if (level >= 20) return 'Ejder Avcısı';
-    if (level >= 10) return 'Borç Kıran';
-    if (level >= 5) return 'Kumbara Şövalyesi';
-    if (level >= 3) return 'Tasarruf Neferi';
-    return 'Çırak';
   }
 }
 
@@ -297,6 +639,13 @@ class AttackResult {
     required this.defeated,
     required this.crit,
     required this.stamp,
+    this.targetKind = TargetKind.debt,
+    this.walletLeft = 0,
+    this.leveledUp = false,
+    this.newLevel = 1,
+    this.snowflake = false,
+    this.monthsSaved = 0,
+    this.streakBonusXp = 0,
   });
 
   final double damage;
@@ -305,4 +654,11 @@ class AttackResult {
   final bool defeated;
   final bool crit;
   final int stamp;
+  final TargetKind targetKind;
+  final double walletLeft;
+  final bool leveledUp;
+  final int newLevel;
+  final bool snowflake;
+  final int monthsSaved;
+  final int streakBonusXp;
 }

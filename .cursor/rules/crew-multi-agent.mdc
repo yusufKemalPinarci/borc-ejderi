@@ -10,14 +10,37 @@ CrewAI kavramları (Agent, Task, Crew, sequential process) yerel ve deterministi
 
 ## Primitifler
 - `Agent`: role, goal, backstory, `execute(task, context)`
-- `Task`: description, expectedOutput, assignedAgent, contextKeys
+- `Task`: description, expectedOutput, assignedAgent, contextKeys (`CrewTasks`)
 - `Crew`: agents + tasks + `Process.sequential` | `hierarchical`
 - `CrewContext`: agent çıktılarını zincirler (`context['analyst']` vb.)
+- `CrewStage`: oyun olayına göre hangi zincir çalışır
+
+## Runtime agentlar ve görevleri
+
+| Agent | Görev |
+|-------|--------|
+| `analyst` | İlerleme, risk, önerilen günlük tutar |
+| `quest` | 2–4 günlük quest (risk/streak koşullu) |
+| `battle` | Hasar, XP, crit, yenilme |
+| `lore` | Spawn / savaş / zafer anlatımı |
+| `coach` | Tip + UI paketi (quests, narrative, battle) |
+
+## Aşama → agent sırası
+
+| Aşama (`CrewStage`) | Ne zaman | Zincir |
+|---------------------|----------|--------|
+| `spawn` | Onboarding / yeni ejderha | Analyst → Quest → Lore → Coach |
+| `dailyPlan` | Açılış, yenileme, saldırı sonrası | Analyst → Quest → Coach |
+| `attack` | Ödeme / birikim kaydı | Analyst → Battle → Lore → Coach |
+| `victory` | Ejderha yenildi (sonraki adım) | Analyst → Lore → Coach |
+
+Görev metinleri: `lib/crew/crew_tasks.dart`. Orkestrasyon: `DebtCrewService.runStage`.
 
 ## Kurallar
 - Harici LLM / CrewAI cloud / API key **yok**
 - Agentlar şablon + kural motoru ile çalışır
 - Yeni agent eklerken aynı `Agent` arayüzünü uygula
+- Yeni aşama: `CrewStage` + `CrewTasks.forStage` + controller çağrısı
 - `kickoff()` çıktısı UI'ya `CrewResult` olarak gider
 
 ## Geliştirme agentları (`agents/`)

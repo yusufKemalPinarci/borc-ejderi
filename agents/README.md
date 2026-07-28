@@ -19,4 +19,32 @@ Harici LLM API veya CrewAI cloud **kullanılmaz**.
 3. Flutter → kod
 4. QA → doğrulama listesi
 
-Runtime oyun agentları için bkz. `lib/crew/`.
+## Context / yeni sohbet
+
+Chat şişince yeni sohbete geç. Süreklilik dosyası:
+
+| Dosya | Rol |
+|-------|-----|
+| `agents/HANDOFF.md` | **Tek aktif** devam noktası — her yeni sohbet buradan |
+| `agents/sessions/` | Bitmiş oturum arşivi |
+| `agents/sessions/_TEMPLATE.md` | Yeni session notu şablonu |
+
+Yeni sohbette: `@agents/HANDOFF.md` ile başla veya agent kuralı otomatik okusun.
+Oturum sonunda: HANDOFF güncelle; gerekirse session arşivle.
+
+## Runtime oyun agentları (`lib/crew/`)
+
+| Agent | Görev |
+|-------|--------|
+| Analyst | İlerleme / risk / önerilen günlük |
+| Quest | Günlük görev listesi |
+| Battle | Hasar / XP / crit |
+| Lore | Anlatım |
+| Coach | Motivasyon + UI paketi |
+
+| Aşama | Zincir |
+|-------|--------|
+| spawn | Analyst → Quest → Lore → Coach |
+| dailyPlan | Analyst → Quest → Coach |
+| attack | Analyst → Battle → Lore → Coach |
+| victory | Analyst → Lore → Coach |

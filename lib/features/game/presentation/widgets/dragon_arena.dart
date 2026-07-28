@@ -78,6 +78,9 @@ class _DragonArenaState extends State<DragonArena>
 
   double _hpRatio(DebtDragon dragon) {
     if (dragon.totalHp <= 0) return 0;
+    if (dragon.isSavings) {
+      return (dragon.currentHp / dragon.totalHp).clamp(0, 1);
+    }
     return (dragon.currentHp / dragon.totalHp).clamp(0, 1);
   }
 
@@ -164,7 +167,10 @@ class _DragonArenaState extends State<DragonArena>
                           curve: Curves.easeInOut,
                         ),
                       ),
-                      child: const Text('🐉', style: TextStyle(fontSize: 72)),
+                      child: Text(
+                        dragon.isSavings ? '🏦' : '🐉',
+                        style: const TextStyle(fontSize: 72),
+                      ),
                     ),
                     const SizedBox(height: 8),
                     Text(
@@ -172,28 +178,48 @@ class _DragonArenaState extends State<DragonArena>
                       style: Theme.of(context).textTheme.headlineMedium,
                       textAlign: TextAlign.center,
                     ),
+                    Text(
+                      dragon.kind.label,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: dragon.isSavings
+                                ? AppTheme.moss
+                                : AppTheme.ember,
+                          ),
+                    ),
                     const SizedBox(height: 12),
                     ClipRRect(
                       borderRadius: BorderRadius.circular(10),
                       child: LinearProgressIndicator(
-                        value: hpValue.clamp(0, 1),
+                        value: dragon.isSavings
+                            ? hpValue.clamp(0, 1)
+                            : hpValue.clamp(0, 1),
                         minHeight: 14,
-                        color: AppTheme.ember,
+                        color: dragon.isSavings ? AppTheme.moss : AppTheme.ember,
                         backgroundColor:
                             AppTheme.mist.withValues(alpha: 0.12),
                       ),
                     ),
                     const SizedBox(height: 10),
                     Text(
-                      '${currency.format(dragon.currentHp)} / ${currency.format(dragon.totalHp)} HP',
+                      dragon.isSavings
+                          ? '${currency.format(dragon.currentHp)} / ${currency.format(dragon.totalHp)}'
+                          : '${currency.format(dragon.currentHp)} / ${currency.format(dragon.totalHp)} HP',
                       style: Theme.of(context).textTheme.bodyLarge,
                     ),
-                    Text(
-                      'İlerleme %${(dragon.progress * 100).toStringAsFixed(0)}',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: AppTheme.gold,
-                          ),
-                    ),
+                    if (dragon.isSavings)
+                      Text(
+                        '${dragon.currentHp.round()} XP birikti · gerçek TL',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: AppTheme.moss,
+                            ),
+                      )
+                    else
+                      Text(
+                        'İlerleme %${(dragon.progress * 100).toStringAsFixed(0)}',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: AppTheme.gold,
+                            ),
+                      ),
                   ],
                 ),
                 if (_floatingHit != null)
@@ -211,15 +237,18 @@ class _DragonArenaState extends State<DragonArena>
                           ),
                           child: Text(
                             _floatingHit!.crit
-                                ? 'KRİTİK -${currency.format(_floatingHit!.damage)}'
-                                : '-${currency.format(_floatingHit!.damage)}',
+                                ? 'KRİTİK ${_floatingHit!.targetKind == TargetKind.savings ? '+' : '-'}${currency.format(_floatingHit!.damage)}'
+                                : '${_floatingHit!.targetKind == TargetKind.savings ? '+' : '-'}${currency.format(_floatingHit!.damage)}',
                             style: Theme.of(context)
                                 .textTheme
                                 .headlineMedium
                                 ?.copyWith(
                                   color: _floatingHit!.crit
                                       ? AppTheme.gold
-                                      : AppTheme.ember,
+                                      : (_floatingHit!.targetKind ==
+                                              TargetKind.savings
+                                          ? AppTheme.moss
+                                          : AppTheme.ember),
                                   fontSize: _floatingHit!.crit ? 26 : 22,
                                 ),
                           ),

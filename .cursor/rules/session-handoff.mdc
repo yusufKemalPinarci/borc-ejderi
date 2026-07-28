@@ -1,0 +1,34 @@
+---
+description: Context şişmesini önle; yeni sohbete HANDOFF ile devam
+alwaysApply: true
+---
+
+# Oturum sürekliliği
+
+Tek kaynak: `agents/HANDOFF.md`. Uzun chat geçmişi yerine bunu kullan.
+
+## Yeni sohbet / belirsiz bağlam
+
+1. Önce `agents/HANDOFF.md` oku
+2. Gerekirse ilgili `agents/sessions/*.md` dosyasına bak
+3. Kullanıcıya uzun özet yapma; HANDOFF’taki “Sonraki adım” ile devam et
+
+## Ne zaman güncelle
+
+- Anlamlı bir özellik / karar bittiğinde
+- Kullanıcı “yeni sohbete geçiyorum”, “handoff yaz”, “özetle” dediğinde
+- Bağlam şişmeye başladıysa (çok dosya, uzun debug) — işi HANDOFF’a yazıp kısa tut
+
+## HANDOFF nasıl yazılır
+
+- Kısa tut (tercihen < 80 satır)
+- Tablo + maddeler; chat dökümü yapma
+- “Sonraki adım” tek net odak olsun
+- Commit edilmemiş önemli iş varsa belirt
+- Bitmiş sprint detayını `agents/sessions/YYYY-MM-DD-konu.md` olarak arşivle (`_TEMPLATE.md`)
+
+## Yasak
+
+- Tüm konuşmayı HANDOFF’a yapıştırma
+- Her mikro değişiklikte güncelleme (gürültü)
+- HANDOFF olmadan “devam edelim” varsayımı (yeni sohbette önce oku)
