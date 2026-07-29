@@ -7,9 +7,9 @@
 
 | Alan | Değer |
 |------|--------|
-| Branch | `cursor/payoff-shell-fortress` |
-| Son commit | `8eb1dfc` — payoff + 4 sekme + kale/streak/snowflake |
-| Working tree | temiz |
+| Branch | `main` (origin’e push edildi) |
+| Son commit | `e8ed6bc` — handoff + payoff/shell/kale |
+| Working tree | temiz (HANDOFF branch satırı güncellendi) |
 | Bloklayan | Yok |
 | Ürün tipi | Kişisel kullanım, offline, TR |
 
