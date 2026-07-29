@@ -62,8 +62,7 @@ class GameController extends AsyncNotifier<GameState> {
     required double debtAmount,
     required double monthlyBudget,
     TargetKind kind = TargetKind.debt,
-    double interestRate = 0,
-    double minPayment = 0,
+    double plannedMonthly = 0,
   }) async {
     final budget = monthlyBudget > 0 ? monthlyBudget : 0.0;
     final hero = HeroProfile.fresh(
@@ -79,10 +78,7 @@ class GameController extends AsyncNotifier<GameState> {
       totalHp: debtAmount,
       currentHp: kind == TargetKind.savings ? 0 : debtAmount,
       createdAt: DateTime.now().toIso8601String(),
-      interestRate: kind == TargetKind.debt ? interestRate : 0,
-      minPayment: kind == TargetKind.debt
-          ? (minPayment > 0 ? minPayment : (debtAmount * 0.02).clamp(50, 5000))
-          : 0,
+      plannedMonthly: kind == TargetKind.debt ? plannedMonthly : 0,
     );
     final incomeLog = PaymentLog(
       id: _uuid.v4(),
@@ -102,47 +98,18 @@ class GameController extends AsyncNotifier<GameState> {
       budgetMonth: _monthKey,
       monthIncome: budget,
       logs: budget > 0 ? [incomeLog] : const [],
-      payoffStrategy: PayoffStrategy.snowball,
     );
     next = _applySpawnCrew(next);
     await _persist(next);
   }
 
-  Future<void> setPayoffStrategy(PayoffStrategy strategy) async {
-    final current = state.asData?.value;
-    if (current == null) return;
-    final focus = current.copyWith(payoffStrategy: strategy).focusDebt;
-    var next = current.copyWith(
-      payoffStrategy: strategy,
-      selectedDragonId: focus?.id ?? current.selectedDragonId,
-    );
-    if (focus != null && !focus.isDefeated) {
-      next = _applyDailyCrew(next);
-    }
-    await _persist(next);
-  }
-
-  /// Asgari üstü aylık ekstra (Undebt.it "extra payment").
-  Future<void> setExtraMonthlyPayment(double? amount) async {
-    final current = state.asData?.value;
-    if (current == null) return;
-    if (amount == null) {
-      await _persist(current.copyWith(clearExtraMonthly: true));
-      return;
-    }
-    await _persist(
-      current.copyWith(extraMonthlyPayment: amount.clamp(0, double.infinity)),
-    );
-  }
-
-  /// Borç / birikim düzenle (isim, bakiye, faiz, asgari).
+  /// Borç / birikim düzenle.
   Future<void> updateDragon({
     required String id,
     String? name,
     double? balance,
     double? totalHp,
-    double? interestRate,
-    double? minPayment,
+    double? plannedMonthly,
   }) async {
     final current = state.asData?.value;
     if (current == null) return;
@@ -165,8 +132,7 @@ class GameController extends AsyncNotifier<GameState> {
       name: name?.trim().isEmpty == true ? d.name : (name ?? d.name),
       currentHp: nextBalance,
       totalHp: nextTotal,
-      interestRate: d.isDebt ? (interestRate ?? d.interestRate) : 0,
-      minPayment: d.isDebt ? (minPayment ?? d.minPayment) : 0,
+      plannedMonthly: d.isDebt ? (plannedMonthly ?? d.plannedMonthly) : 0,
     );
 
     final dragons = [...current.dragons];
@@ -178,21 +144,26 @@ class GameController extends AsyncNotifier<GameState> {
     await _persist(next);
   }
 
-  /// Aylık geliri kasaya ekler. Aynı ayda birikir; ay değişince yeni ay başlar.
+  /// Aylık geliri kasaya ekler.
   Future<void> loadMonthlyBudget(double amount) async {
     final current = state.asData?.value;
     if (current == null || amount <= 0) return;
 
     final sameMonth = current.budgetMonth == _monthKey;
-    final hero = current.hero.copyWith(
+    final streaked = _applyStreak(current.hero);
+    var hero = streaked.hero;
+    if (streaked.xp > 0) {
+      hero = _grantXp(hero, streaked.xp);
+    }
+    hero = hero.copyWith(
       monthlyBudget: amount,
-      wallet: current.hero.wallet + amount,
+      wallet: hero.wallet + amount,
     );
     final log = PaymentLog(
       id: _uuid.v4(),
       amount: amount,
       damage: 0,
-      xp: 0,
+      xp: streaked.xp,
       narrative: sameMonth
           ? 'Kasaya ek gelir yüklendi.'
           : 'Yeni ay bütçesi açıldı.',
@@ -206,6 +177,7 @@ class GameController extends AsyncNotifier<GameState> {
         budgetMonth: _monthKey,
         monthIncome: sameMonth ? current.monthIncome + amount : amount,
         logs: [log, ...current.logs].take(80).toList(),
+        lastNarrative: log.narrative,
       ),
     );
   }
@@ -233,7 +205,7 @@ class GameController extends AsyncNotifier<GameState> {
       id: _uuid.v4(),
       amount: amount,
       damage: 0,
-      xp: 0,
+      xp: streaked.xp,
       narrative: '$label için ${amount.toStringAsFixed(0)} TL harcandı.',
       createdAt: DateTime.now().toIso8601String(),
       targetName: label,
@@ -257,14 +229,12 @@ class GameController extends AsyncNotifier<GameState> {
         quests: quests,
         logs: [log, ...current.logs].take(80).toList(),
         lastNarrative: log.narrative,
-        lastCrewTip:
-            'Harcamayı yazdın. Birikime de iş ver — 1 TL = 1 XP.',
+        lastCrewTip: 'Harcamayı yazdın. Odak borca da vur.',
       ),
     );
     return true;
   }
 
-  /// Kasayı belirli bir tutara ayarlar (düzeltme).
   Future<void> setWallet(double amount) async {
     final current = state.asData?.value;
     if (current == null || amount < 0) return;
@@ -285,12 +255,45 @@ class GameController extends AsyncNotifier<GameState> {
     await _persist(next);
   }
 
+  /// Hedefi listeden çıkar (yanlış eklenen borç / birikim).
+  Future<void> deleteDragon(String id) async {
+    final current = state.asData?.value;
+    if (current == null) return;
+    final dragons = current.dragons.where((d) => d.id != id).toList();
+    if (dragons.length == current.dragons.length) return;
+
+    String? nextSelected = current.selectedDragonId;
+    if (nextSelected == id) {
+      final focus = GameState(
+        onboarded: current.onboarded,
+        hero: current.hero,
+        dragons: dragons,
+        selectedDragonId: null,
+        logs: current.logs,
+        quests: current.quests,
+        lastCrewTip: current.lastCrewTip,
+        lastNarrative: current.lastNarrative,
+        budgetMonth: current.budgetMonth,
+        monthIncome: current.monthIncome,
+      ).focusDebt;
+      nextSelected = focus?.id ??
+          (dragons.isNotEmpty ? dragons.first.id : null);
+    }
+
+    await _persist(
+      current.copyWith(
+        dragons: dragons,
+        selectedDragonId: nextSelected,
+        clearSelected: nextSelected == null,
+      ),
+    );
+  }
+
   Future<void> addTarget({
     required String name,
     required double amount,
     required TargetKind kind,
-    double interestRate = 0,
-    double minPayment = 0,
+    double plannedMonthly = 0,
   }) async {
     final current = state.asData?.value;
     if (current == null || amount <= 0) return;
@@ -304,10 +307,7 @@ class GameController extends AsyncNotifier<GameState> {
       totalHp: amount,
       currentHp: kind == TargetKind.savings ? 0 : amount,
       createdAt: DateTime.now().toIso8601String(),
-      interestRate: kind == TargetKind.debt ? interestRate : 0,
-      minPayment: kind == TargetKind.debt
-          ? (minPayment > 0 ? minPayment : (amount * 0.02).clamp(50, 5000))
-          : 0,
+      plannedMonthly: kind == TargetKind.debt ? plannedMonthly : 0,
     );
 
     var next = current.copyWith(
@@ -318,7 +318,6 @@ class GameController extends AsyncNotifier<GameState> {
     await _persist(next);
   }
 
-  /// Eski API — yeni hedef ekler (borç).
   Future<void> setNewDragon({
     required String name,
     required double amount,
@@ -349,7 +348,6 @@ class GameController extends AsyncNotifier<GameState> {
       targetName: dragon.name,
       wallet: current.hero.wallet,
       focusDebtName: current.focusDebt?.name ?? dragon.name,
-      strategyLabel: current.payoffStrategy.label,
     );
     return _mergeCrewPayload(current, result.finalPayload, mergeQuests: true);
   }
@@ -367,7 +365,6 @@ class GameController extends AsyncNotifier<GameState> {
       targetName: dragon.name,
       wallet: current.hero.wallet,
       focusDebtName: current.focusDebt?.name ?? dragon.name,
-      strategyLabel: current.payoffStrategy.label,
     );
     return _mergeCrewPayload(current, result.finalPayload, mergeQuests: true);
   }
@@ -384,7 +381,6 @@ class GameController extends AsyncNotifier<GameState> {
       targetName: dragon.name,
       wallet: current.hero.wallet,
       focusDebtName: current.focusDebt?.name ?? '',
-      strategyLabel: current.payoffStrategy.label,
     );
     return _mergeCrewPayload(current, result.finalPayload, mergeQuests: false);
   }
@@ -415,14 +411,12 @@ class GameController extends AsyncNotifier<GameState> {
     return next.copyWith(quests: quests);
   }
 
-  /// Kasada yeterli para var mı?
   bool canAfford(double amount) {
     final wallet = state.asData?.value.hero.wallet ?? 0;
     return amount > 0 && wallet >= amount;
   }
 
   /// Odak borca / birikime ödeme.
-  /// [snowflake] = Debt Payoff Planner tek seferlik ekstra (ikramiye vb.).
   Future<AttackResult?> attack(
     double amount, {
     bool snowflake = false,
@@ -431,11 +425,10 @@ class GameController extends AsyncNotifier<GameState> {
     final dragon = current?.selectedDragon;
     if (current == null || dragon == null || amount <= 0) return null;
     if (dragon.isDefeated) return null;
-
     if (current.hero.wallet < amount) return null;
 
     final monthsBefore =
-        dragon.isDebt ? current.payoffPlan.months : 0;
+        dragon.isDebt ? (current.estimatedDebtFreeMonths ?? 0) : 0;
 
     final result = _crew.runAttack(
       debtRemaining: dragon.currentHp,
@@ -447,7 +440,6 @@ class GameController extends AsyncNotifier<GameState> {
       targetName: dragon.name,
       wallet: current.hero.wallet,
       focusDebtName: current.focusDebt?.name ?? dragon.name,
-      strategyLabel: current.payoffStrategy.label,
     );
 
     final battle = Map<String, dynamic>.from(
@@ -499,14 +491,10 @@ class GameController extends AsyncNotifier<GameState> {
 
     final quests = current.quests.map((q) {
       if (q.completed) return q;
-      if (q.type == 'payment' &&
-          dragon.isDebt &&
-          amount >= q.targetAmount) {
+      if (q.type == 'payment' && dragon.isDebt && amount >= q.targetAmount) {
         return q.copyWith(completed: true);
       }
-      if (q.type == 'save' &&
-          dragon.isSavings &&
-          amount >= q.targetAmount) {
+      if (q.type == 'save' && dragon.isSavings && amount >= q.targetAmount) {
         return q.copyWith(completed: true);
       }
       if (q.type == 'streak' && amount > 0) {
@@ -549,7 +537,7 @@ class GameController extends AsyncNotifier<GameState> {
     await _persist(next);
 
     final monthsAfter =
-        dragon.isDebt ? next.payoffPlan.months : 0;
+        dragon.isDebt ? (next.estimatedDebtFreeMonths ?? 0) : 0;
     final monthsSaved =
         dragon.isDebt ? (monthsBefore - monthsAfter).clamp(0, 600) : 0;
 
@@ -601,7 +589,6 @@ class GameController extends AsyncNotifier<GameState> {
     await _persist(current.copyWith(hero: hero, quests: quests));
   }
 
-  /// Yeni günde ilk kayıt → streak + küçük XP.
   ({HeroProfile hero, int xp}) _applyStreak(HeroProfile hero) {
     final today = _today;
     if (hero.lastActiveDay == today) {

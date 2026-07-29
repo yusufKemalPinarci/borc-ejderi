@@ -11,27 +11,27 @@ Offline borç yönetimi RPG (Türkiye).
 ## Referans app’ler
 | Rol | App | Neden |
 |-----|-----|-------|
-| Borç mantığı | **Debt Payoff Planner** (OxbowSoft, 500K+) | Odak, kartopu/çığ, ödeme, borçsuz tarih |
-| Oyunlaştırma | **Fortune City** (SPARKFUL, 1M+) | Kayıt → görsel ilerleme, streak, günlük dönüş |
-| Hesap motoru esin | Undebt.it (web) | Faiz + rollover simülasyonu |
+| Borç mantığı | **Debt Payoff Planner** (OxbowSoft, 500K+) | Liste, odak borç, ödeme, ilerleme |
+| Oyunlaştırma | **Fortune City** (SPARKFUL, 1M+) | Kayıt → görsel ilerleme, streak |
 
-Hibrit: DPP planı + Fortune City ödül döngüsü.  
-Görsel tema: şehir değil — **kale / ejderha** (offline).
+Hibrit: DPP sade borç çekirdeği + Fortune City ödül döngüsü.  
+Görsel tema: şehir değil — **kale / ejderha** (offline).  
+**Faiz, kartopu/çığ seçici, simülatör yok.**
 
-## ABD borç app özellikleri (oyunda)
-1. Borç listesi: bakiye, faiz %, asgari ödeme
-2. Strateji: Kartopu (küçükten) / Çığ (yüksek faizden)
-3. Odak borç + ödeme kaydı + aylık ekstra
-4. Borçsuz tarih / toplam faiz (`PayoffSimulator`)
+## Oyunda olanlar
+1. Borç listesi: ad + bakiye (+ isteğe bağlı aylık ödeme hedefi)
+2. Odak borç (manuel seçim veya en küçük bakiye)
+3. Ödeme kaydı + gelir / gider
+4. Faizsiz borçsuz tarih tahmini (`kalan / aylık`)
 5. Manuel giriş — banka sync yok
 
 ## Ekranlar
 | Sekme | Tek iş |
 |-------|--------|
 | Savaş | Odak ejderhaya vur |
-| Borçlar | Liste + strateji + plan |
-| Zaferler | Öldürülenler + seviye/güç |
-| Günlük | Nereye harcandı |
+| Borçlar | Liste + odak seç |
+| Kale | Odalar + zaferler + seviye |
+| Günlük | Gelir / gider / ödeme geçmişi |
 
 ## Core loop
 1. Hedef ekle → 2. Gelir → kasa → 3. Odak ödeme / birikim / yaşam
@@ -40,7 +40,7 @@ Görsel tema: şehir değil — **kale / ejderha** (offline).
 ## Kurallar (`game_rules.dart`)
 - 1:1 hasar / XP; çarpan yok
 - Crit = görsel; HP cezası yok
-- Faiz plan kehanetinde; savaşta can yakmaz
+- Faiz yok (savaşta da planda da)
 - Fortune City’den: kayıt = ödül hissi; sosyal/konum yok
 
 ## Multi-agent

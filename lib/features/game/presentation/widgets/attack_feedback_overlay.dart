@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -6,7 +8,7 @@ import '../../../../core/theme/app_theme.dart';
 import '../../domain/models.dart';
 import '../game_controller.dart';
 
-/// Product+Design kararı: vuruş feedback overlay (hit / crit / defeat).
+/// Vuruş / kritik / zafer overlay — zaferde confetti tarzı parçacıklar.
 class AttackFeedbackOverlay extends StatefulWidget {
   const AttackFeedbackOverlay({
     super.key,
@@ -24,15 +26,27 @@ class AttackFeedbackOverlay extends StatefulWidget {
 class _AttackFeedbackOverlayState extends State<AttackFeedbackOverlay>
     with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl;
+  late final List<_Particle> _particles;
 
   @override
   void initState() {
     super.initState();
+    final rng = math.Random(widget.result.stamp);
+    _particles = List.generate(
+      widget.result.defeated ? 28 : (widget.result.crit ? 12 : 0),
+      (i) => _Particle(
+        angle: rng.nextDouble() * math.pi * 2,
+        speed: 40 + rng.nextDouble() * 120,
+        size: 3 + rng.nextDouble() * 5,
+        hue: rng.nextBool(),
+      ),
+    );
+
     _ctrl = AnimationController(
       vsync: this,
       duration: Duration(
         milliseconds: widget.result.defeated
-            ? 2200
+            ? 2400
             : widget.result.crit
                 ? 1400
                 : 1100,
@@ -91,6 +105,35 @@ class _AttackFeedbackOverlayState extends State<AttackFeedbackOverlay>
                   ),
                 ),
               ),
+              if (_particles.isNotEmpty)
+                CustomPaint(
+                  painter: _ConfettiPainter(
+                    particles: _particles,
+                    progress: _ctrl.value,
+                    gold: AppTheme.gold,
+                    moss: AppTheme.moss,
+                    ember: AppTheme.ember,
+                  ),
+                ),
+              if (result.defeated)
+                Center(
+                  child: Opacity(
+                    opacity: (0.35 * fade).clamp(0.0, 1.0),
+                    child: Container(
+                      width: 220 + 80 * t,
+                      height: 220 + 80 * t,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: RadialGradient(
+                          colors: [
+                            AppTheme.gold.withValues(alpha: 0.45),
+                            Colors.transparent,
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               Center(
                 child: Opacity(
                   opacity: fade.clamp(0.0, 1.0).toDouble(),
@@ -118,11 +161,14 @@ class _AttackFeedbackOverlayState extends State<AttackFeedbackOverlay>
                             Text(
                               result.targetKind == TargetKind.savings
                                   ? 'BİRİKİM TAMAM'
-                                  : 'EJDERHA YENİLDİ',
+                                  : 'EJDERHA DÜŞTÜ',
                               style: Theme.of(context)
                                   .textTheme
                                   .headlineMedium
-                                  ?.copyWith(color: AppTheme.moss),
+                                  ?.copyWith(
+                                    color: AppTheme.moss,
+                                    fontSize: 28,
+                                  ),
                               textAlign: TextAlign.center,
                             )
                           else
@@ -184,7 +230,9 @@ class _AttackFeedbackOverlayState extends State<AttackFeedbackOverlay>
                               padding:
                                   const EdgeInsets.symmetric(horizontal: 32),
                               child: Text(
-                                result.narrative,
+                                result.narrative.isNotEmpty
+                                    ? result.narrative
+                                    : 'Kale mezarlığına bir zafer eklendi.',
                                 textAlign: TextAlign.center,
                                 style: Theme.of(context).textTheme.bodyLarge,
                               ),
@@ -207,6 +255,60 @@ class _AttackFeedbackOverlayState extends State<AttackFeedbackOverlay>
       ),
     );
   }
+}
+
+class _Particle {
+  const _Particle({
+    required this.angle,
+    required this.speed,
+    required this.size,
+    required this.hue,
+  });
+
+  final double angle;
+  final double speed;
+  final double size;
+  final bool hue;
+}
+
+class _ConfettiPainter extends CustomPainter {
+  _ConfettiPainter({
+    required this.particles,
+    required this.progress,
+    required this.gold,
+    required this.moss,
+    required this.ember,
+  });
+
+  final List<_Particle> particles;
+  final double progress;
+  final Color gold;
+  final Color moss;
+  final Color ember;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final cx = size.width / 2;
+    final cy = size.height / 2;
+    final t = Curves.easeOut.transform(progress.clamp(0, 1));
+    final fade = (1 - progress).clamp(0.0, 1.0);
+
+    for (final p in particles) {
+      final dist = p.speed * t;
+      final x = cx + math.cos(p.angle) * dist;
+      final y = cy + math.sin(p.angle) * dist + 40 * t * t;
+      final color = p.hue ? gold : (progress > 0.5 ? moss : ember);
+      canvas.drawCircle(
+        Offset(x, y),
+        p.size * (1 - 0.4 * t),
+        Paint()..color = color.withValues(alpha: 0.85 * fade),
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _ConfettiPainter old) =>
+      old.progress != progress;
 }
 
 Future<void> showAttackFeedback(

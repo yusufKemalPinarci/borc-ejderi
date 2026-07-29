@@ -9,7 +9,7 @@ import '../widgets/fortress_panel.dart';
 import '../widgets/hero_panel.dart';
 import 'wallet_sheet.dart';
 
-/// Öldürülen borçlar + kale + birikim/seviye (iyi hisset ekranı).
+/// Kale + öldürülen borçlar + seviye (Fortune City ödül ekranı).
 class VictoriesTab extends ConsumerWidget {
   const VictoriesTab({super.key});
 
@@ -21,9 +21,8 @@ class VictoriesTab extends ConsumerWidget {
     }
 
     final currency = NumberFormat.currency(locale: 'tr_TR', symbol: '₺');
-    final slain = state.dragons
-        .where((d) => d.isDebt && d.isDefeated)
-        .toList();
+    final slain =
+        state.dragons.where((d) => d.isDebt && d.isDefeated).toList();
     final filledSavings =
         state.dragons.where((d) => d.isSavings && d.isDefeated).toList();
     final totalSlain = slain.fold(0.0, (s, d) => s + d.totalHp);
@@ -31,16 +30,17 @@ class VictoriesTab extends ConsumerWidget {
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
       children: [
+        FortressPanel(fortress: state.fortress),
+        const SizedBox(height: 12),
+        Text(
+          'Seri ${state.hero.streak} gün · her yeni günde +${GameRules.streakDailyXp} XP',
+          style:
+              Theme.of(context).textTheme.bodyMedium?.copyWith(fontSize: 12),
+        ),
+        const SizedBox(height: 16),
         HeroPanel(
           hero: state.hero,
           onLoadBudget: () => showWalletSheet(context),
-        ),
-        const SizedBox(height: 16),
-        FortressPanel(fortress: state.fortress),
-        const SizedBox(height: 8),
-        Text(
-          'Seri ${state.hero.streak} gün · her yeni günde +${GameRules.streakDailyXp} XP',
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontSize: 12),
         ),
         const SizedBox(height: 20),
         Text(
@@ -132,8 +132,7 @@ class VictoriesTab extends ConsumerWidget {
                   borderRadius: BorderRadius.circular(14),
                 ),
                 tileColor: AppTheme.slate.withValues(alpha: 0.9),
-                leading:
-                    const Icon(Icons.savings, color: AppTheme.moss),
+                leading: const Icon(Icons.savings, color: AppTheme.moss),
                 title: Text(d.name),
                 subtitle: Text(currency.format(d.totalHp)),
               ),
@@ -142,13 +141,13 @@ class VictoriesTab extends ConsumerWidget {
         ],
         const SizedBox(height: 20),
         Text(
-          'Güç nasıl yükselir?',
+          'Nasıl çalışır?',
           style: Theme.of(context).textTheme.titleLarge,
         ),
         const SizedBox(height: 6),
         Text(
-          'Birikim: 1 TL = 1 XP. Yeni günde ilk kayıt: +5 XP. '
-          'Borç ödemesi hasar verir; kale odaları kayıtla büyür.',
+          'Ödeme: 1 TL = 1 hasar. Birikim: 1 TL = 1 XP. '
+          'Yeni günde ilk kayıt: +5 XP. Kale odaları her kayıtla büyür.',
           style: Theme.of(context).textTheme.bodyMedium,
         ),
       ],

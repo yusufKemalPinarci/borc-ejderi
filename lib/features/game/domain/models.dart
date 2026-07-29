@@ -1,5 +1,4 @@
 import '../../../core/constants/game_rules.dart';
-import 'payoff_simulator.dart';
 
 /// Borç düşürme veya birikim doldurma hedefi.
 enum TargetKind {
@@ -71,8 +70,7 @@ class MonthSummary {
   double get debtRatio => income <= 0 ? 0 : debtPaid / income;
   double get saveRatio => income <= 0 ? 0 : saved / income;
 
-  bool get isBalanced =>
-      hasActiveDebt ? debtPaid > 0 : saved > 0;
+  bool get isBalanced => hasActiveDebt ? debtPaid > 0 : saved > 0;
 
   double get health {
     if (income <= 0) return wallet > 0 ? 0.35 : 0;
@@ -106,20 +104,20 @@ class MonthSummary {
     if (hasActiveDebt && debtPaid <= 0) {
       return 'Odak borca ödeme kaydet — 1 TL = 1 hasar.';
     }
-    if (hasActiveDebt) return 'Asgari + ekstra ödemeyi odak borca yönlendir.';
+    if (hasActiveDebt) return 'Kasadan odak ejderhaya vur.';
     if (saved <= 0) return 'Borçlar bittiyse birikim hedefi aç.';
     return 'İyi gidiyorsun — kaydı bozma.';
   }
 }
 
 /// Fortune City’deki “şehir” — bizde sade kale özeti (kişisel).
-/// Karmaşık sim yok; kayıt sayısından türetilir.
 class FortressSummary {
   const FortressSummary({
     required this.battleRooms,
     required this.vaultRooms,
     required this.tombs,
     required this.snowflakes,
+    this.ledgerEntries = 0,
   });
 
   /// Borç ödemesi kayıtları.
@@ -134,7 +132,17 @@ class FortressSummary {
   /// Kar tanesi (tek seferlik) ödemeler.
   final int snowflakes;
 
-  int get totalRooms => battleRooms + vaultRooms + tombs;
+  /// Gelir + yaşam kayıtları (Fortune City günlük hissi).
+  final int ledgerEntries;
+
+  int get totalRooms =>
+      battleRooms + vaultRooms + tombs + (ledgerEntries > 0 ? 1 : 0);
+
+  /// Oda doluluk 0–1 (görsel büyüme için).
+  double fillRatio(int count, {int softCap = 12}) {
+    if (count <= 0) return 0;
+    return (count / softCap).clamp(0.08, 1.0);
+  }
 
   String get prosperityLabel {
     if (totalRooms >= 30) return 'Sağlam kale';
@@ -249,10 +257,7 @@ class HeroProfile {
   }
 }
 
-/// Borç (ejderha) veya birikim hedefi.
-///
-/// Borç alanları Undebt.it / Debt Payoff Planner tarzı:
-/// bakiye, yıllık faiz %, asgari ödeme.
+/// Borç (ejderha) veya birikim hedefi — faiz / asgari yok.
 class DebtDragon {
   const DebtDragon({
     required this.id,
@@ -261,8 +266,7 @@ class DebtDragon {
     required this.currentHp,
     required this.createdAt,
     this.kind = TargetKind.debt,
-    this.interestRate = 0,
-    this.minPayment = 0,
+    this.plannedMonthly = 0,
   });
 
   final String id;
@@ -274,11 +278,8 @@ class DebtDragon {
   final double currentHp;
   final String createdAt;
 
-  /// Yıllık faiz % (örn. 3.5 = %3,5). Sadece borç.
-  final double interestRate;
-
-  /// Aylık asgari ödeme (TL). Sadece borç.
-  final double minPayment;
+  /// İsteğe bağlı aylık ödeme hedefi (faizsiz “ne zaman biter?” için).
+  final double plannedMonthly;
 
   bool get isDebt => kind == TargetKind.debt;
   bool get isSavings => kind == TargetKind.savings;
@@ -307,8 +308,7 @@ class DebtDragon {
     double? totalHp,
     double? currentHp,
     String? createdAt,
-    double? interestRate,
-    double? minPayment,
+    double? plannedMonthly,
   }) {
     return DebtDragon(
       id: id ?? this.id,
@@ -317,8 +317,7 @@ class DebtDragon {
       totalHp: totalHp ?? this.totalHp,
       currentHp: currentHp ?? this.currentHp,
       createdAt: createdAt ?? this.createdAt,
-      interestRate: interestRate ?? this.interestRate,
-      minPayment: minPayment ?? this.minPayment,
+      plannedMonthly: plannedMonthly ?? this.plannedMonthly,
     );
   }
 
@@ -329,11 +328,14 @@ class DebtDragon {
         'totalHp': totalHp,
         'currentHp': currentHp,
         'createdAt': createdAt,
-        'interestRate': interestRate,
-        'minPayment': minPayment,
+        'plannedMonthly': plannedMonthly,
       };
 
   factory DebtDragon.fromJson(Map<String, dynamic> json) {
+    // Eski kayıtlarda minPayment → plannedMonthly migrate.
+    final planned = (json['plannedMonthly'] as num?)?.toDouble() ??
+        (json['minPayment'] as num?)?.toDouble() ??
+        0;
     return DebtDragon(
       id: json['id'] as String? ?? 'legacy',
       name: json['name'] as String? ?? 'Borç Ejderi',
@@ -341,8 +343,7 @@ class DebtDragon {
       totalHp: (json['totalHp'] as num?)?.toDouble() ?? 0,
       currentHp: (json['currentHp'] as num?)?.toDouble() ?? 0,
       createdAt: json['createdAt'] as String? ?? '',
-      interestRate: (json['interestRate'] as num?)?.toDouble() ?? 0,
-      minPayment: (json['minPayment'] as num?)?.toDouble() ?? 0,
+      plannedMonthly: planned,
     );
   }
 }
@@ -373,7 +374,7 @@ class PaymentLog {
   final TargetKind targetKind;
   final MoneyFlow flow;
 
-  /// Debt Payoff Planner "snowflake" — tek seferlik ekstra.
+  /// Tek seferlik ekstra ödeme (ikramiye vb.).
   final bool isSnowflake;
 
   Map<String, dynamic> toJson() => {
@@ -477,8 +478,6 @@ class GameState {
     this.lastNarrative = '',
     this.budgetMonth = '',
     this.monthIncome = 0,
-    this.payoffStrategy = PayoffStrategy.snowball,
-    this.extraMonthlyPayment,
   });
 
   final bool onboarded;
@@ -492,12 +491,6 @@ class GameState {
   final String budgetMonth;
   final double monthIncome;
 
-  /// Kartopu veya çığ (Undebt.it / Debt Payoff Planner).
-  final PayoffStrategy payoffStrategy;
-
-  /// Asgari üstü aylık ekstra (null = gelirden otomatik tahmin).
-  final double? extraMonthlyPayment;
-
   DebtDragon? get selectedDragon {
     if (dragons.isEmpty) return null;
     final id = selectedDragonId;
@@ -506,8 +499,7 @@ class GameState {
         if (d.id == id) return d;
       }
     }
-    return focusDebt ??
-        (dragons.isNotEmpty ? dragons.first : null);
+    return focusDebt ?? (dragons.isNotEmpty ? dragons.first : null);
   }
 
   DebtDragon? get dragon => selectedDragon;
@@ -527,83 +519,71 @@ class GameState {
   double get totalSaved =>
       dragons.where((d) => d.isSavings).fold(0.0, (sum, d) => sum + d.currentHp);
 
-  double get totalMinPayments =>
-      activeDebts.fold(0.0, (sum, d) => sum + d.minPayment);
-
-  /// Stratejiye göre odak borç.
+  /// Kullanıcı seçimi aktif borçsa o; değilse en küçük bakiye.
   DebtDragon? get focusDebt {
+    final id = selectedDragonId;
+    if (id != null) {
+      for (final d in activeDebts) {
+        if (d.id == id) return d;
+      }
+    }
     final list = orderedDebts;
     return list.isEmpty ? null : list.first;
   }
 
-  /// Geriye uyum.
-  DebtDragon? get snowballDebt => focusDebt;
-
-  /// Sıralı aktif borçlar (stratejiye göre).
+  /// En küçük bakiyeden (motivasyon); strateji seçici yok.
   List<DebtDragon> get orderedDebts {
     final list = activeDebts.toList();
-    switch (payoffStrategy) {
-      case PayoffStrategy.snowball:
-        list.sort((a, b) => a.currentHp.compareTo(b.currentHp));
-      case PayoffStrategy.avalanche:
-        list.sort((a, b) {
-          final byRate = b.interestRate.compareTo(a.interestRate);
-          if (byRate != 0) return byRate;
-          return a.currentHp.compareTo(b.currentHp);
-        });
-    }
+    list.sort((a, b) => a.currentHp.compareTo(b.currentHp));
     return list;
   }
 
-  List<DebtDragon> get debtsSnowballOrder => orderedDebts;
-
-  /// Asgari üstü ekstra: kullanıcı değeri veya gelir tahmini.
-  double get resolvedExtraMonthly {
-    if (extraMonthlyPayment != null) {
-      return extraMonthlyPayment!.clamp(0, double.infinity);
-    }
+  /// Faizsiz aylık ödeme tahmini.
+  double get estimatedMonthlyPay {
+    final fromPlans = activeDebts.fold(0.0, (s, d) => s + d.plannedMonthly);
+    if (fromPlans > 0) return fromPlans;
     final income = monthIncome > 0 ? monthIncome : hero.monthlyBudget;
-    final leftover = income - totalMinPayments;
-    if (leftover <= 0) return 0;
-    final fromRatio = income * GameRules.defaultExtraFromIncomeRatio;
-    return leftover < fromRatio ? leftover : fromRatio;
+    if (income <= 0) return 0;
+    return income * GameRules.defaultDebtBudgetRatio;
   }
 
-  /// Undebt.it tarzı tam plan (faiz + rollover).
-  PayoffPlan get payoffPlan => PayoffSimulator.simulate(
-        debts: dragons,
-        strategy: payoffStrategy,
-        extraMonthly: resolvedExtraMonthly,
-      );
-
-  PayoffComparison get payoffComparison => PayoffSimulator.compare(
-        debts: dragons,
-        primaryStrategy: payoffStrategy,
-        extraMonthly: resolvedExtraMonthly,
-      );
-
-  /// Aylık borç ateş gücü (asgariler + ekstra).
-  double get monthlyDebtFirepower => payoffPlan.monthlyBudget;
-
+  /// Faizsiz: kalan / aylık tahmin.
   int? get estimatedDebtFreeMonths {
     if (activeDebts.isEmpty) return 0;
-    return payoffPlan.months;
+    final monthly = estimatedMonthlyPay;
+    if (monthly <= 0) return null;
+    final months = (totalDebtRemaining / monthly).ceil();
+    return months.clamp(1, GameRules.simplePayoffMaxMonths);
   }
 
   String? get debtFreeLabel {
     if (activeDebts.isEmpty) return 'Borçsuz!';
-    final plan = payoffPlan;
-    return '${plan.dateLabel} · ${plan.monthsLabel}';
+    final months = estimatedDebtFreeMonths;
+    if (months == null) return null;
+    final now = DateTime.now();
+    final free = DateTime(now.year, now.month + months, 1);
+    final label =
+        '${_monthTr(free.month)} ${free.year} · ~$months ay';
+    return label;
   }
 
-  /// Bu ay odak ejderhaya önerilen vuruş.
-  double get suggestedFocusPayment => payoffPlan.focusPaymentThisMonth;
+  /// Önerilen vuruş: odak borcun planı veya kasa / aylık pay.
+  double get suggestedFocusPayment {
+    final focus = focusDebt;
+    if (focus == null) return 0;
+    if (focus.plannedMonthly > 0) {
+      return focus.plannedMonthly.clamp(0, hero.wallet);
+    }
+    final share = estimatedMonthlyPay;
+    if (share <= 0) return hero.wallet > 0 ? hero.wallet : 0;
+    return share.clamp(0, hero.wallet > 0 ? hero.wallet : share);
+  }
 
-  /// Kayıtlardan türetilen kale (Fortune City sade karşılık).
   FortressSummary get fortress {
     var battle = 0;
     var vault = 0;
     var flakes = 0;
+    var ledger = 0;
     for (final log in logs) {
       switch (log.flow) {
         case MoneyFlow.debtPay:
@@ -613,16 +593,16 @@ class GameState {
           vault++;
         case MoneyFlow.live:
         case MoneyFlow.income:
-          break;
+          ledger++;
       }
     }
-    final tombs =
-        dragons.where((d) => d.isDebt && d.isDefeated).length;
+    final tombs = dragons.where((d) => d.isDebt && d.isDefeated).length;
     return FortressSummary(
       battleRooms: battle,
       vaultRooms: vault,
       tombs: tombs,
       snowflakes: flakes,
+      ledgerEntries: ledger,
     );
   }
 
@@ -666,10 +646,7 @@ class GameState {
     String? lastNarrative,
     String? budgetMonth,
     double? monthIncome,
-    PayoffStrategy? payoffStrategy,
-    double? extraMonthlyPayment,
     bool clearSelected = false,
-    bool clearExtraMonthly = false,
   }) {
     return GameState(
       onboarded: onboarded ?? this.onboarded,
@@ -683,10 +660,6 @@ class GameState {
       lastNarrative: lastNarrative ?? this.lastNarrative,
       budgetMonth: budgetMonth ?? this.budgetMonth,
       monthIncome: monthIncome ?? this.monthIncome,
-      payoffStrategy: payoffStrategy ?? this.payoffStrategy,
-      extraMonthlyPayment: clearExtraMonthly
-          ? null
-          : (extraMonthlyPayment ?? this.extraMonthlyPayment),
     );
   }
 
@@ -701,8 +674,6 @@ class GameState {
         'lastNarrative': lastNarrative,
         'budgetMonth': budgetMonth,
         'monthIncome': monthIncome,
-        'payoffStrategy': payoffStrategy.name,
-        'extraMonthlyPayment': extraMonthlyPayment,
       };
 
   factory GameState.fromJson(Map<String, dynamic> json) {
@@ -733,8 +704,8 @@ class GameState {
       onboarded: json['onboarded'] as bool? ?? false,
       hero: hero,
       dragons: dragons,
-      selectedDragonId: selectedId ??
-          (dragons.isNotEmpty ? dragons.first.id : null),
+      selectedDragonId:
+          selectedId ?? (dragons.isNotEmpty ? dragons.first.id : null),
       logs: (json['logs'] as List? ?? [])
           .map((e) => PaymentLog.fromJson(Map<String, dynamic>.from(e as Map)))
           .toList(),
@@ -747,9 +718,6 @@ class GameState {
           ? DateTime.now().toIso8601String().substring(0, 7)
           : budgetMonth,
       monthIncome: monthIncome > 0 ? monthIncome : hero.monthlyBudget,
-      payoffStrategy: PayoffStrategy.fromName(json['payoffStrategy'] as String?),
-      extraMonthlyPayment:
-          (json['extraMonthlyPayment'] as num?)?.toDouble(),
     );
   }
 
@@ -759,5 +727,24 @@ class GameState {
       hero: HeroProfile.fresh('Kahraman'),
       budgetMonth: DateTime.now().toIso8601String().substring(0, 7),
     );
+  }
+
+  static String _monthTr(int month) {
+    const names = [
+      '',
+      'Oca',
+      'Şub',
+      'Mar',
+      'Nis',
+      'May',
+      'Haz',
+      'Tem',
+      'Ağu',
+      'Eyl',
+      'Eki',
+      'Kas',
+      'Ara',
+    ];
+    return names[month.clamp(1, 12)];
   }
 }

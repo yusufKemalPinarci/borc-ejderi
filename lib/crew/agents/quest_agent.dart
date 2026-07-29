@@ -20,7 +20,6 @@ class QuestAgent implements Agent {
     final streak = (a['streak'] as num?)?.toInt() ?? 0;
     final wallet = (inputs['wallet'] as num?)?.toDouble() ?? 0;
     final focusName = inputs['focusDebtName'] as String? ?? 'odak borç';
-    final strategyLabel = inputs['strategyLabel'] as String? ?? 'Kartopu';
 
     final payAmount = wallet > 0
         ? suggested.clamp(50, wallet).toDouble()
@@ -32,7 +31,7 @@ class QuestAgent implements Agent {
         'id': 'pay_daily',
         'title': 'Odak borca öde',
         'description':
-            '$strategyLabel: $focusName için '
+            '$focusName için '
             '${payAmount.toStringAsFixed(0)} TL öde (1 TL = 1 hasar).',
         'targetAmount': payAmount,
         'xpReward': 0,

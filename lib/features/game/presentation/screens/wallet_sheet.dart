@@ -91,7 +91,12 @@ class _WalletSheetState extends ConsumerState<WalletSheet> {
               await ref
                   .read(gameControllerProvider.notifier)
                   .loadMonthlyBudget(amount);
-              if (context.mounted) Navigator.pop(context);
+              if (!context.mounted) return;
+              final messenger = ScaffoldMessenger.of(context);
+              Navigator.pop(context);
+              messenger.showSnackBar(
+                const SnackBar(content: Text('Gelir eklendi · kale güçlendi')),
+              );
             },
             child: const Text('Kasaya ekle'),
           ),

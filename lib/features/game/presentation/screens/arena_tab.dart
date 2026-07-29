@@ -9,9 +9,10 @@ import '../widgets/attack_confirm_dialog.dart';
 import '../widgets/attack_feedback_overlay.dart';
 import '../widgets/dragon_arena.dart';
 import 'new_dragon_sheet.dart';
+import 'shell_screen.dart';
 import 'wallet_sheet.dart';
 
-/// Tek iş: odak borca / birikime vur.
+/// Tek iş: odak ejderhaya / birikime vur.
 class ArenaTab extends ConsumerStatefulWidget {
   const ArenaTab({super.key});
 
@@ -46,28 +47,7 @@ class _ArenaTabState extends ConsumerState<ArenaTab> {
     }
 
     if (dragon.isDefeated && state.activeDebts.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Tüm borçlar düştü.',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Zaferler sekmesinde zaferlerini gör. Yeni hedef ekleyebilirsin.',
-              style: Theme.of(context).textTheme.bodyLarge,
-            ),
-            const SizedBox(height: 20),
-            FilledButton(
-              onPressed: () => showNewDragonSheet(context),
-              child: const Text('Yeni hedef'),
-            ),
-          ],
-        ),
-      );
+      return _ClearedArena(onAdd: () => showNewDragonSheet(context));
     }
 
     final focus = state.focusDebt ?? dragon;
@@ -80,68 +60,31 @@ class _ArenaTabState extends ConsumerState<ArenaTab> {
         : focus;
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
       children: [
-        Text(
-          active.isSavings ? 'Birikim hedefi' : 'Odak ejderha',
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: AppTheme.gold,
-                fontWeight: FontWeight.w700,
-              ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          active.name,
-          style: Theme.of(context).textTheme.headlineMedium,
-        ),
-        if (!active.isSavings && state.debtFreeLabel != null) ...[
-          const SizedBox(height: 6),
-          Text(
-            'Borçsuz: ${state.debtFreeLabel}',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: AppTheme.mist.withValues(alpha: 0.7),
-                  fontSize: 13,
-                ),
+        if (!active.isSavings && state.debtFreeLabel != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(
+              'Borçsuz ~ ${state.debtFreeLabel}',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: AppTheme.mist.withValues(alpha: 0.65),
+                    fontSize: 12,
+                  ),
+            ),
           ),
-        ],
-        const SizedBox(height: 8),
-        Text(
-          'Kasa ${currency.format(state.hero.wallet)}',
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                color: AppTheme.gold,
-                fontSize: 16,
-              ),
-        ),
-        const SizedBox(height: 16),
         if (active.isDefeated)
-          Text(
-            'Bu hedef bitti. Borçlar sekmesinden sonrakini seç.',
-            style: Theme.of(context).textTheme.bodyLarge,
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Text(
+              'Bu hedef bitti. Borçlar sekmesinden sonrakini seç.',
+              style: Theme.of(context).textTheme.bodyLarge,
+            ),
           )
         else ...[
           DragonArena(dragon: active, hit: _lastHit),
-          const SizedBox(height: 12),
-          if (state.lastNarrative.isNotEmpty)
-            Text(
-              state.lastNarrative,
-              style: Theme.of(context).textTheme.bodyLarge,
-            ),
           const SizedBox(height: 16),
-          if (!active.isSavings && state.suggestedFocusPayment > 0)
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton(
-                onPressed: () {
-                  final s = state.suggestedFocusPayment;
-                  final w = state.hero.wallet;
-                  final fill = s > w && w > 0 ? w : s;
-                  _amountCtrl.text = fill.toStringAsFixed(0);
-                },
-                child: Text(
-                  'Önerilen: ${currency.format(state.suggestedFocusPayment)}',
-                ),
-              ),
-            ),
           TextField(
             controller: _amountCtrl,
             keyboardType: TextInputType.number,
@@ -151,38 +94,66 @@ class _ArenaTabState extends ConsumerState<ArenaTab> {
               helperText: active.isSavings
                   ? '1 TL = 1 XP güç'
                   : '1 TL = 1 hasar',
+              suffixIcon: !active.isSavings && state.suggestedFocusPayment > 0
+                  ? IconButton(
+                      tooltip: 'Önerilen',
+                      onPressed: () {
+                        final s = state.suggestedFocusPayment;
+                        final w = state.hero.wallet;
+                        final fill = s > w && w > 0 ? w : s;
+                        _amountCtrl.text = fill.toStringAsFixed(0);
+                      },
+                      icon: const Icon(Icons.auto_awesome, size: 20),
+                    )
+                  : null,
             ),
           ),
-          if (!active.isSavings) ...[
-            const SizedBox(height: 4),
+          if (!active.isSavings)
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
-              title: const Text('Kar tanesi'),
+              dense: true,
+              title: const Text('Kar tanesi', style: TextStyle(fontSize: 14)),
               subtitle: const Text(
-                'İkramiye / vergi iadesi gibi tek seferlik ekstra',
+                'Tek seferlik ekstra (ikramiye vb.)',
+                style: TextStyle(fontSize: 11),
               ),
               value: _snowflake,
               onChanged: (v) => setState(() => _snowflake = v),
             ),
-          ],
-          const SizedBox(height: 12),
-          FilledButton(
-            onPressed: _attacking
-                ? null
-                : state.hero.wallet <= 0
-                    ? () => showWalletSheet(context)
-                    : () => _onAttack(state, active),
-            child: Text(
-              _attacking
-                  ? 'Kaydediliyor...'
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            height: 52,
+            child: FilledButton(
+              onPressed: _attacking
+                  ? null
                   : state.hero.wallet <= 0
-                      ? 'Önce kasa yükle'
-                      : active.isSavings
-                          ? 'Birikime işle'
-                          : _snowflake
-                              ? 'Kar tanesiyle vur'
-                              : 'Borca vur',
+                      ? () => showWalletSheet(context)
+                      : () => _onAttack(state, active),
+              child: Text(
+                _attacking
+                    ? 'Kaydediliyor...'
+                    : state.hero.wallet <= 0
+                        ? 'Önce kasa yükle'
+                        : active.isSavings
+                            ? 'Birikime işle'
+                            : _snowflake
+                                ? 'Kar tanesiyle vur'
+                                : 'Borca vur',
+                style: const TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Kasa ${currency.format(state.hero.wallet)}',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: AppTheme.gold,
+                ),
           ),
         ],
       ],
@@ -200,9 +171,9 @@ class _ArenaTabState extends ConsumerState<ArenaTab> {
     if (state.selectedDragonId != dragon.id) {
       await controller.selectDragon(dragon.id);
     }
+    if (!mounted) return;
 
     if (!controller.canAfford(amount)) {
-      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -242,16 +213,13 @@ class _ArenaTabState extends ConsumerState<ArenaTab> {
     if (result == null || !mounted) return;
     await showAttackFeedback(context, result);
     if (!mounted) return;
-    if (result.monthsSaved > 0 || result.streakBonusXp > 0) {
-      final parts = <String>[];
-      if (result.monthsSaved > 0) {
-        parts.add('Borçsuz tarih ~${result.monthsSaved} ay kısaldı');
-      }
-      if (result.streakBonusXp > 0) {
-        parts.add('+${result.streakBonusXp} seri XP');
-      }
+    if (result.defeated) {
+      ref.read(shellTabIndexProvider.notifier).set(2); // Kale
+    } else if (result.streakBonusXp > 0) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(parts.join(' · '))),
+        SnackBar(
+          content: Text('+${result.streakBonusXp} seri XP · kale büyüdü'),
+        ),
       );
     }
   }
@@ -264,27 +232,57 @@ class _EmptyArena extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Henüz ejderha yok.',
-            style: Theme.of(context).textTheme.headlineMedium,
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Bir borç ekle; odak buraya düşer. Öde, hasar ver, iyi hisset.',
-            style: Theme.of(context).textTheme.bodyLarge,
-          ),
-          const SizedBox(height: 20),
-          FilledButton(
-            onPressed: onAdd,
-            child: const Text('Borç ekle'),
-          ),
-        ],
-      ),
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+      children: [
+        const DragonPreviewBanner(),
+        const SizedBox(height: 20),
+        Text(
+          'Henüz ejderha yok.',
+          style: Theme.of(context).textTheme.headlineMedium,
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Bir borç ekle; odak buraya düşer. Öde, hasar ver.',
+          style: Theme.of(context).textTheme.bodyLarge,
+        ),
+        const SizedBox(height: 20),
+        FilledButton(
+          onPressed: onAdd,
+          child: const Text('Borç ekle'),
+        ),
+      ],
+    );
+  }
+}
+
+class _ClearedArena extends StatelessWidget {
+  const _ClearedArena({required this.onAdd});
+
+  final VoidCallback onAdd;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+      children: [
+        const DragonPreviewBanner(victorious: true),
+        const SizedBox(height: 20),
+        Text(
+          'Tüm borçlar düştü.',
+          style: Theme.of(context).textTheme.headlineMedium,
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Kale sekmesinde zaferlerini gör. Yeni hedef ekleyebilirsin.',
+          style: Theme.of(context).textTheme.bodyLarge,
+        ),
+        const SizedBox(height: 20),
+        FilledButton(
+          onPressed: onAdd,
+          child: const Text('Yeni hedef'),
+        ),
+      ],
     );
   }
 }

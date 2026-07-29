@@ -96,7 +96,11 @@ class _ExpenseSheetState extends ConsumerState<ExpenseSheet> {
                 );
                 return;
               }
+              final messenger = ScaffoldMessenger.of(context);
               Navigator.pop(context);
+              messenger.showSnackBar(
+                const SnackBar(content: Text('Kayıt alındı · kale güçlendi')),
+              );
             },
             child: const Text('Kasadan düş'),
           ),

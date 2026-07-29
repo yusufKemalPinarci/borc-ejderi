@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../domain/models.dart';
 import '../game_controller.dart';
+import '../widgets/dragon_arena.dart';
 
 class OnboardingScreen extends ConsumerStatefulWidget {
   const OnboardingScreen({super.key});
@@ -16,8 +17,6 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   final _budgetCtrl = TextEditingController(text: '15000');
   final _dragonCtrl = TextEditingController(text: 'Kredi Kartı');
   final _amountCtrl = TextEditingController(text: '25000');
-  final _rateCtrl = TextEditingController(text: '3.5');
-  final _minCtrl = TextEditingController(text: '500');
 
   @override
   void dispose() {
@@ -25,8 +24,6 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     _budgetCtrl.dispose();
     _dragonCtrl.dispose();
     _amountCtrl.dispose();
-    _rateCtrl.dispose();
-    _minCtrl.dispose();
     super.dispose();
   }
 
@@ -53,14 +50,16 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 'Borç Ejderi',
                 style: Theme.of(context).textTheme.displayLarge,
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 16),
+              const DragonPreviewBanner(height: 120),
+              const SizedBox(height: 16),
               Text(
-                'Borçlarını listele, Kartopu veya Çığ stratejisini seç, '
-                'ödeme kaydet. 1 TL ödeme = 1 hasar; birikim = güç XP. '
-                'Türkiye için, tamamen offline.',
+                'Borçlarını listele, odak ejderhaya öde. '
+                '1 TL = 1 hasar; birikim = güç XP. '
+                'Gelir ve giderini kaydet — tamamen offline.',
                 style: Theme.of(context).textTheme.bodyLarge,
               ),
-              const SizedBox(height: 36),
+              const SizedBox(height: 28),
               TextField(
                 controller: _heroCtrl,
                 decoration: const InputDecoration(labelText: 'Kahraman adı'),
@@ -89,23 +88,6 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                   labelText: 'Kalan bakiye (TL)',
                 ),
               ),
-              const SizedBox(height: 14),
-              TextField(
-                controller: _rateCtrl,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'Yıllık faiz (%)',
-                  hintText: 'Bilmiyorsan 0',
-                ),
-              ),
-              const SizedBox(height: 14),
-              TextField(
-                controller: _minCtrl,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'Asgari ödeme (TL)',
-                ),
-              ),
               const SizedBox(height: 28),
               FilledButton(
                 onPressed: () async {
@@ -115,14 +97,6 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                       0;
                   final budget = double.tryParse(
                         _budgetCtrl.text.replaceAll(',', '.'),
-                      ) ??
-                      0;
-                  final rate = double.tryParse(
-                        _rateCtrl.text.replaceAll(',', '.'),
-                      ) ??
-                      0;
-                  final minPay = double.tryParse(
-                        _minCtrl.text.replaceAll(',', '.'),
                       ) ??
                       0;
                   if (debt <= 0 || budget <= 0) {
@@ -141,8 +115,6 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                         debtAmount: debt,
                         monthlyBudget: budget,
                         kind: TargetKind.debt,
-                        interestRate: rate,
-                        minPayment: minPay,
                       );
                 },
                 child: const Text('Maceraya başla'),

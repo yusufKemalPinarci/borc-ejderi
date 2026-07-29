@@ -3,7 +3,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:borc_rpg/core/constants/game_rules.dart';
 import 'package:borc_rpg/crew/debt_crew_service.dart';
 import 'package:borc_rpg/features/game/domain/models.dart';
-import 'package:borc_rpg/features/game/domain/payoff_simulator.dart';
 
 void main() {
   test('dailyPlan: Analyst → Quest → Coach', () {
@@ -124,6 +123,19 @@ void main() {
     expect(state.selectedDragonId, isNotNull);
   });
 
+  test('legacy minPayment migrates to plannedMonthly', () {
+    final dragon = DebtDragon.fromJson({
+      'id': 'x',
+      'name': 'Kart',
+      'totalHp': 1000,
+      'currentHp': 800,
+      'createdAt': 'a',
+      'minPayment': 400,
+      'interestRate': 3.5,
+    });
+    expect(dragon.plannedMonthly, 400);
+  });
+
   test('Hero wallet tracks monthly budget', () {
     final hero = HeroProfile.fresh('Ali', monthlyBudget: 10000);
     expect(hero.wallet, 10000);
@@ -139,7 +151,6 @@ void main() {
     expect(hero.savedTotal, 0);
     expect(hero.level, 1);
 
-    // Simüle: 150 TL birikim → 150 XP, seviye eşiği 100
     var xp = 150;
     var level = 1;
     var title = hero.title;
@@ -159,7 +170,7 @@ void main() {
     expect(powered.xp, 50);
   });
 
-  test('snowball picks smallest active debt', () {
+  test('focus defaults to smallest active debt', () {
     final state = GameState(
       onboarded: true,
       hero: HeroProfile.fresh('Ali'),
@@ -180,123 +191,54 @@ void main() {
         ),
       ],
     );
-    expect(state.snowballDebt?.id, 'small');
     expect(state.focusDebt?.id, 'small');
+    expect(state.orderedDebts.first.id, 'small');
   });
 
-  test('avalanche picks highest interest debt', () {
+  test('user selection overrides smallest-debt focus', () {
     final state = GameState(
       onboarded: true,
       hero: HeroProfile.fresh('Ali'),
-      payoffStrategy: PayoffStrategy.avalanche,
+      selectedDragonId: 'big',
       dragons: [
         DebtDragon(
-          id: 'cheap',
-          name: 'İhtiyaç',
-          totalHp: 5000,
-          currentHp: 5000,
-          interestRate: 1.5,
+          id: 'big',
+          name: 'Kredi',
+          totalHp: 20000,
+          currentHp: 18000,
           createdAt: 'a',
         ),
         DebtDragon(
-          id: 'pricey',
+          id: 'small',
           name: 'Kart',
-          totalHp: 8000,
-          currentHp: 8000,
-          interestRate: 4.2,
+          totalHp: 2000,
+          currentHp: 500,
           createdAt: 'b',
         ),
       ],
     );
-    expect(state.focusDebt?.id, 'pricey');
-    expect(state.orderedDebts.map((d) => d.id).toList(), ['pricey', 'cheap']);
+    expect(state.focusDebt?.id, 'big');
   });
 
-  test('debt free plan uses min + extra with rollover math', () {
+  test('simple debt-free estimate is remaining / monthly', () {
     final state = GameState(
       onboarded: true,
       hero: HeroProfile.fresh('Ali', monthlyBudget: 10000),
       monthIncome: 10000,
-      extraMonthlyPayment: 2700,
       dragons: [
         DebtDragon(
           id: 'd1',
           name: 'Kart',
           totalHp: 9000,
           currentHp: 9000,
-          minPayment: 300,
-          interestRate: 0,
+          plannedMonthly: 3000,
           createdAt: 'a',
         ),
       ],
     );
-    // Aylık ateş = 300 + 2700 = 3000 → 9000 / 3000 = 3 ay
-    expect(state.payoffPlan.monthlyBudget, 3000);
+    expect(state.estimatedMonthlyPay, 3000);
     expect(state.estimatedDebtFreeMonths, 3);
-    expect(state.suggestedFocusPayment, 3000);
     expect(state.debtFreeLabel, contains('3 ay'));
-  });
-
-  test('payoff simulator rolls min to next debt (snowball)', () {
-    final debts = [
-      DebtDragon(
-        id: 'small',
-        name: 'Küçük',
-        totalHp: 1000,
-        currentHp: 1000,
-        minPayment: 100,
-        interestRate: 0,
-        createdAt: 'a',
-      ),
-      DebtDragon(
-        id: 'big',
-        name: 'Büyük',
-        totalHp: 5000,
-        currentHp: 5000,
-        minPayment: 200,
-        interestRate: 0,
-        createdAt: 'b',
-      ),
-    ];
-    final plan = PayoffSimulator.simulate(
-      debts: debts,
-      strategy: PayoffStrategy.snowball,
-      extraMonthly: 200,
-    );
-    expect(plan.milestones.first.dragonId, 'small');
-    expect(plan.focusPaymentThisMonth, 300); // 100 min + 200 extra
-    expect(plan.months, greaterThan(0));
-    expect(plan.months, lessThan(GameRules.payoffSimMaxMonths));
-  });
-
-  test('avalanche prefers higher APR for fewer interest months', () {
-    final debts = [
-      DebtDragon(
-        id: 'low',
-        name: 'Düşük',
-        totalHp: 4000,
-        currentHp: 4000,
-        minPayment: 100,
-        interestRate: 1,
-        createdAt: 'a',
-      ),
-      DebtDragon(
-        id: 'high',
-        name: 'Yüksek',
-        totalHp: 4000,
-        currentHp: 4000,
-        minPayment: 100,
-        interestRate: 24,
-        createdAt: 'b',
-      ),
-    ];
-    final cmp = PayoffSimulator.compare(
-      debts: debts,
-      primaryStrategy: PayoffStrategy.avalanche,
-      extraMonthly: 300,
-    );
-    expect(cmp.primary.milestones.first.dragonId, 'high');
-    expect(cmp.primary.totalInterest, lessThanOrEqualTo(cmp.alternate.totalInterest));
   });
 
   test('month health favors save+debt allocation', () {
@@ -371,13 +313,54 @@ void main() {
           flow: MoneyFlow.debtPay,
           isSnowflake: true,
         ),
+        PaymentLog(
+          id: '4',
+          amount: 1000,
+          damage: 0,
+          xp: 0,
+          narrative: 'gelir',
+          createdAt: '2026-07-04',
+          flow: MoneyFlow.income,
+        ),
       ],
     );
     expect(state.fortress.battleRooms, 2);
     expect(state.fortress.vaultRooms, 1);
     expect(state.fortress.tombs, 1);
     expect(state.fortress.snowflakes, 1);
+    expect(state.fortress.ledgerEntries, 1);
     expect(state.fortress.totalRooms, greaterThan(0));
+  });
+
+  test('deleteDragon removes target and reassigns focus', () {
+    final state = GameState(
+      onboarded: true,
+      hero: HeroProfile.fresh('Ali'),
+      selectedDragonId: 'big',
+      dragons: [
+        DebtDragon(
+          id: 'big',
+          name: 'Kredi',
+          totalHp: 20000,
+          currentHp: 18000,
+          createdAt: 'a',
+        ),
+        DebtDragon(
+          id: 'small',
+          name: 'Kart',
+          totalHp: 2000,
+          currentHp: 500,
+          createdAt: 'b',
+        ),
+      ],
+    );
+    final dragons = state.dragons.where((d) => d.id != 'big').toList();
+    final next = state.copyWith(
+      dragons: dragons,
+      selectedDragonId: dragons.first.id,
+    );
+    expect(next.dragons.length, 1);
+    expect(next.focusDebt?.id, 'small');
   });
 
   test('streak daily xp constant is small for personal use', () {

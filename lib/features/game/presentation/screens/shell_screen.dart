@@ -9,23 +9,28 @@ import 'ledger_tab.dart';
 import 'victories_tab.dart';
 import 'wallet_sheet.dart';
 
-/// Debt Payoff Planner + Hunter Vault tarzı: her sekmenin tek işi var.
-class ShellScreen extends ConsumerStatefulWidget {
-  const ShellScreen({super.key});
-
+class ShellTabIndex extends Notifier<int> {
   @override
-  ConsumerState<ShellScreen> createState() => _ShellScreenState();
+  int build() => 0;
+
+  void set(int index) => state = index.clamp(0, 3);
 }
 
-class _ShellScreenState extends ConsumerState<ShellScreen> {
-  int _index = 0;
+/// Kabuk sekme indeksi (0 Savaş, 1 Borçlar, 2 Kale, 3 Günlük).
+final shellTabIndexProvider =
+    NotifierProvider<ShellTabIndex, int>(ShellTabIndex.new);
 
-  static const _titles = ['Savaş', 'Borçlar', 'Zaferler', 'Günlük'];
+/// Debt Payoff Planner + Fortune City kale: her sekmenin tek işi var.
+class ShellScreen extends ConsumerWidget {
+  const ShellScreen({super.key});
+
+  static const _titles = ['Savaş', 'Borçlar', 'Kale', 'Günlük'];
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(gameControllerProvider).asData?.value;
     final hero = state?.hero;
+    final index = ref.watch(shellTabIndexProvider);
 
     return Scaffold(
       body: Container(
@@ -45,7 +50,7 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
                   children: [
                     Expanded(
                       child: Text(
-                        _titles[_index],
+                        _titles[index.clamp(0, _titles.length - 1)],
                         style: Theme.of(context).textTheme.headlineMedium,
                       ),
                     ),
@@ -72,7 +77,7 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
               ),
               Expanded(
                 child: IndexedStack(
-                  index: _index,
+                  index: index.clamp(0, 3),
                   children: const [
                     ArenaTab(),
                     DebtsTab(),
@@ -86,8 +91,9 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
         ),
       ),
       bottomNavigationBar: NavigationBar(
-        selectedIndex: _index,
-        onDestinationSelected: (i) => setState(() => _index = i),
+        selectedIndex: index.clamp(0, 3),
+        onDestinationSelected: (i) =>
+            ref.read(shellTabIndexProvider.notifier).set(i),
         backgroundColor: AppTheme.slate,
         indicatorColor: AppTheme.ember.withValues(alpha: 0.25),
         destinations: const [
@@ -102,9 +108,9 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
             label: 'Borçlar',
           ),
           NavigationDestination(
-            icon: Icon(Icons.emoji_events_outlined),
-            selectedIcon: Icon(Icons.emoji_events),
-            label: 'Zaferler',
+            icon: Icon(Icons.home_work_outlined),
+            selectedIcon: Icon(Icons.home_work),
+            label: 'Kale',
           ),
           NavigationDestination(
             icon: Icon(Icons.receipt_long_outlined),

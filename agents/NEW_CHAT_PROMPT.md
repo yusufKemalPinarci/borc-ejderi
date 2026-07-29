@@ -7,8 +7,8 @@ Aşağıdaki bloğu kopyala → yeni Cursor chat’e yapıştır.
 
 Kurallar:
 - Kişisel kullanım, offline, oyun sade kalsın
-- Referans: Debt Payoff Planner (borç) + Fortune City sade (kale/streak; şehir sim yok)
-- Branch: cursor/payoff-shell-fortress
+- Referans: Debt Payoff Planner sade (faizsiz) + Fortune City kale/streak
+- Faiz / çığ / simülatör ekleme
 - Anlamlı iş bitince agents/HANDOFF.md güncelle; chat dökümü yazma
 - Sonraki adım HANDOFF’taki “Sonraki adım” maddesi
 
@@ -16,4 +16,4 @@ Kurallar:
 ```
 
 İsteğe bağlı: son cümleyi değiştirerek spesifik iş söyleyebilirsin  
-örn. `Şimdi APK oluştur.` / `Şimdi borç kategori etiketi ekle.`
+örn. `Şimdi APK oluştur.` / `Şimdi zafer ses efekti ekle.`

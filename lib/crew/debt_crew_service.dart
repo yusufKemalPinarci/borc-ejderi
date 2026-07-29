@@ -8,13 +8,6 @@ import 'crew_stage.dart';
 import 'crew_tasks.dart';
 
 /// Borç Ejderi runtime crew'u — aşama bazlı sequential process.
-///
-/// | Aşama | Agent sırası |
-/// |-------|----------------|
-/// | spawn | Analyst → Quest → Lore → Coach |
-/// | dailyPlan | Analyst → Quest → Coach |
-/// | attack | Analyst → Battle → Lore → Coach |
-/// | victory | Analyst → Lore → Coach |
 class DebtCrewService {
   static final List<Agent> _agents = [
     AnalystAgent(),
@@ -24,7 +17,6 @@ class DebtCrewService {
     CoachAgent(),
   ];
 
-  /// Belirli bir oyun aşaması için crew'u çalıştırır.
   CrewResult runStage(
     CrewStage stage, {
     required double debtRemaining,
@@ -37,7 +29,6 @@ class DebtCrewService {
     String targetName = '',
     double wallet = 0,
     String focusDebtName = '',
-    String strategyLabel = 'Kartopu',
   }) {
     final paid = attackAmount > 0 ? attackAmount : todayPaid;
     final crew = Crew(
@@ -59,12 +50,10 @@ class DebtCrewService {
         'targetName': targetName,
         'wallet': wallet,
         'focusDebtName': focusDebtName.isEmpty ? targetName : focusDebtName,
-        'strategyLabel': strategyLabel,
       },
     );
   }
 
-  /// Onboarding / yeni ejderha çağrısı.
   CrewResult runSpawn({
     required double debtRemaining,
     required double debtTotal,
@@ -74,7 +63,6 @@ class DebtCrewService {
     String targetName = '',
     double wallet = 0,
     String focusDebtName = '',
-    String strategyLabel = 'Kartopu',
   }) {
     return runStage(
       CrewStage.spawn,
@@ -86,11 +74,9 @@ class DebtCrewService {
       targetName: targetName,
       wallet: wallet,
       focusDebtName: focusDebtName,
-      strategyLabel: strategyLabel,
     );
   }
 
-  /// Günlük plan / quest yenileme.
   CrewResult runDailyPlan({
     required double debtRemaining,
     required double debtTotal,
@@ -101,7 +87,6 @@ class DebtCrewService {
     String targetName = '',
     double wallet = 0,
     String focusDebtName = '',
-    String strategyLabel = 'Kartopu',
   }) {
     return runStage(
       CrewStage.dailyPlan,
@@ -114,11 +99,9 @@ class DebtCrewService {
       targetName: targetName,
       wallet: wallet,
       focusDebtName: focusDebtName,
-      strategyLabel: strategyLabel,
     );
   }
 
-  /// Ödeme / birikim (hasar + anlatım + koç). 1 TL = 1 hasar.
   CrewResult runAttack({
     required double debtRemaining,
     required double debtTotal,
@@ -129,7 +112,6 @@ class DebtCrewService {
     String targetName = '',
     double wallet = 0,
     String focusDebtName = '',
-    String strategyLabel = 'Kartopu',
   }) {
     return runStage(
       CrewStage.attack,
@@ -142,11 +124,9 @@ class DebtCrewService {
       targetName: targetName,
       wallet: wallet,
       focusDebtName: focusDebtName,
-      strategyLabel: strategyLabel,
     );
   }
 
-  /// Hedef tamamlandıktan sonra sonraki adım.
   CrewResult runVictory({
     required double debtTotal,
     required int streak,
@@ -155,7 +135,6 @@ class DebtCrewService {
     String targetName = '',
     double wallet = 0,
     String focusDebtName = '',
-    String strategyLabel = 'Kartopu',
   }) {
     return runStage(
       CrewStage.victory,
@@ -167,7 +146,6 @@ class DebtCrewService {
       targetName: targetName,
       wallet: wallet,
       focusDebtName: focusDebtName,
-      strategyLabel: strategyLabel,
     );
   }
 }

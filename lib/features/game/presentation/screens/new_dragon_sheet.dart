@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../../core/constants/game_rules.dart';
 import '../../domain/models.dart';
 import '../game_controller.dart';
 
@@ -27,16 +26,14 @@ class NewDragonSheet extends ConsumerStatefulWidget {
 class _NewDragonSheetState extends ConsumerState<NewDragonSheet> {
   final _nameCtrl = TextEditingController(text: 'Kredi kartı');
   final _amountCtrl = TextEditingController();
-  final _rateCtrl = TextEditingController(text: '3.5');
-  final _minCtrl = TextEditingController();
+  final _plannedCtrl = TextEditingController();
   TargetKind _kind = TargetKind.debt;
 
   @override
   void dispose() {
     _nameCtrl.dispose();
     _amountCtrl.dispose();
-    _rateCtrl.dispose();
-    _minCtrl.dispose();
+    _plannedCtrl.dispose();
     super.dispose();
   }
 
@@ -99,21 +96,12 @@ class _NewDragonSheetState extends ConsumerState<NewDragonSheet> {
             if (!isSavings) ...[
               const SizedBox(height: 12),
               TextField(
-                controller: _rateCtrl,
+                controller: _plannedCtrl,
                 keyboardType: TextInputType.number,
                 decoration: const InputDecoration(
-                  labelText: 'Yıllık faiz (%)',
-                  hintText: 'örn. 3.5',
-                  helperText: 'Çığ stratejisi için — bilmiyorsan 0 bırak',
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _minCtrl,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'Asgari ödeme (TL)',
-                  hintText: 'Boşsa yaklaşık hesaplanır',
+                  labelText: 'Aylık ödeme hedefi (TL)',
+                  hintText: 'İsteğe bağlı',
+                  helperText: 'Boş bırakırsan gelirin %30’u ile tahmin edilir',
                 ),
               ),
             ],
@@ -125,20 +113,15 @@ class _NewDragonSheetState extends ConsumerState<NewDragonSheet> {
                     ) ??
                     0;
                 if (amount <= 0) return;
-                final rate = double.tryParse(
-                      _rateCtrl.text.replaceAll(',', '.'),
-                    ) ??
-                    0;
-                final minPay = double.tryParse(
-                      _minCtrl.text.replaceAll(',', '.'),
+                final planned = double.tryParse(
+                      _plannedCtrl.text.replaceAll(',', '.'),
                     ) ??
                     0;
                 await ref.read(gameControllerProvider.notifier).addTarget(
                       name: _nameCtrl.text,
                       amount: amount,
                       kind: _kind,
-                      interestRate: rate,
-                      minPayment: minPay,
+                      plannedMonthly: planned,
                     );
                 if (context.mounted) Navigator.pop(context);
               },

@@ -6,8 +6,9 @@ import '../../../../core/theme/app_theme.dart';
 import '../../domain/models.dart';
 import '../game_controller.dart';
 import 'expense_sheet.dart';
+import 'wallet_sheet.dart';
 
-/// Nereye gitti: gelir / borç / birikim / yaşam.
+/// Fortune City hissi: gelir / gider / ödeme geçmişi + hızlı kayıt.
 class LedgerTab extends ConsumerWidget {
   const LedgerTab({super.key});
 
@@ -30,6 +31,26 @@ class LedgerTab extends ConsumerWidget {
           style: Theme.of(context).textTheme.titleLarge,
         ),
         const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: FilledButton.icon(
+                onPressed: () => showWalletSheet(context),
+                icon: const Icon(Icons.add_card_outlined, size: 18),
+                label: const Text('Gelir'),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: () => showExpenseSheet(context),
+                icon: const Icon(Icons.shopping_bag_outlined, size: 18),
+                label: const Text('Gider'),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
         _FlowCard(
           label: 'Gelir',
           amount: summary.income,
@@ -43,7 +64,7 @@ class LedgerTab extends ConsumerWidget {
           currency: currency,
         ),
         _FlowCard(
-          label: 'Birikim (güç)',
+          label: 'Birikim',
           amount: summary.saved,
           color: AppTheme.moss,
           currency: currency,
@@ -61,13 +82,12 @@ class LedgerTab extends ConsumerWidget {
           currency: currency,
         ),
         const SizedBox(height: 8),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: OutlinedButton.icon(
-            onPressed: () => showExpenseSheet(context),
-            icon: const Icon(Icons.shopping_bag_outlined, size: 18),
-            label: const Text('Yaşam harcaması ekle'),
-          ),
+        Text(
+          summary.tip,
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: AppTheme.mist.withValues(alpha: 0.7),
+                fontSize: 12,
+              ),
         ),
         const SizedBox(height: 20),
         Text(
@@ -77,7 +97,7 @@ class LedgerTab extends ConsumerWidget {
         const SizedBox(height: 8),
         if (logs.isEmpty)
           Text(
-            'Henüz kayıt yok. Savaş veya harcama yazınca burada listelenir.',
+            'Henüz kayıt yok. Gelir/gider ekle veya Savaş’tan öde.',
             style: Theme.of(context).textTheme.bodyMedium,
           )
         else

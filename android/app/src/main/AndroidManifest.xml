@@ -1,6 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- google_fonts ilk indirme; oyun mantığı offline kalır -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <application
-        android:label="borc_rpg"
+        android:label="Borç Ejderi"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

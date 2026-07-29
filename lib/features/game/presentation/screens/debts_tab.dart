@@ -2,15 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
-import '../../../../core/constants/game_rules.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../game_controller.dart';
-import '../widgets/battle_plan_panel.dart';
 import 'edit_dragon_sheet.dart';
-import 'expense_sheet.dart';
 import 'new_dragon_sheet.dart';
 
-/// Debt Payoff Planner tarzı: borç listesi + strateji + kısa plan.
+/// Debt Payoff Planner sade: borç listesi + odak seç.
 class DebtsTab extends ConsumerWidget {
   const DebtsTab({super.key});
 
@@ -24,6 +21,7 @@ class DebtsTab extends ConsumerWidget {
     final currency = NumberFormat.currency(locale: 'tr_TR', symbol: '₺');
     final active = state.orderedDebts;
     final savings = state.activeSavings;
+    final focusId = state.focusDebt?.id;
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
@@ -34,44 +32,29 @@ class DebtsTab extends ConsumerWidget {
         ),
         const SizedBox(height: 4),
         Text(
-          'Odak = stratejiye göre ilk sıra. Uzun bas → düzenle.',
+          'Dokun → odak seç. Uzun bas → düzenle. '
+          'Seçim yoksa en küçük bakiyeden başlar.',
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontSize: 12),
         ),
-        if (active.isNotEmpty) ...[
-          const SizedBox(height: 12),
-          SegmentedButton<PayoffStrategy>(
-            segments: [
-              ButtonSegment(
-                value: PayoffStrategy.snowball,
-                label: Text(PayoffStrategy.snowball.label),
-              ),
-              ButtonSegment(
-                value: PayoffStrategy.avalanche,
-                label: Text(PayoffStrategy.avalanche.label),
-              ),
-            ],
-            selected: {state.payoffStrategy},
-            onSelectionChanged: (v) => ref
-                .read(gameControllerProvider.notifier)
-                .setPayoffStrategy(v.first),
-          ),
-          const SizedBox(height: 6),
+        if (state.debtFreeLabel != null && active.isNotEmpty) ...[
+          const SizedBox(height: 10),
           Text(
-            state.payoffStrategy.hint,
+            'Borçsuz ~ ${state.debtFreeLabel}',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  fontSize: 12,
+                  color: AppTheme.gold,
+                  fontWeight: FontWeight.w600,
                 ),
           ),
         ],
         const SizedBox(height: 12),
         if (active.isEmpty)
           Text(
-            'Aktif borç yok. Zaferler sekmesine bak veya yeni borç ekle.',
+            'Aktif borç yok. Kale sekmesine bak veya yeni borç ekle.',
             style: Theme.of(context).textTheme.bodyLarge,
           )
         else
           ...active.map((d) {
-            final isFocus = d.id == state.focusDebt?.id;
+            final isFocus = d.id == focusId;
             return Padding(
               padding: const EdgeInsets.only(bottom: 8),
               child: ListTile(
@@ -92,12 +75,22 @@ class DebtsTab extends ConsumerWidget {
                 subtitle: Text(
                   [
                     currency.format(d.currentHp),
-                    if (d.interestRate > 0)
-                      '%${d.interestRate.toStringAsFixed(1)}',
-                    if (d.minPayment > 0)
-                      'Asgari ${currency.format(d.minPayment)}',
+                    if (d.plannedMonthly > 0)
+                      'Aylık ${currency.format(d.plannedMonthly)}',
                     if (isFocus) 'ODAK',
                   ].join(' · '),
+                ),
+                trailing: ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: SizedBox(
+                    width: 48,
+                    height: 6,
+                    child: LinearProgressIndicator(
+                      value: d.progress,
+                      color: AppTheme.ember,
+                      backgroundColor: AppTheme.mist.withValues(alpha: 0.15),
+                    ),
+                  ),
                 ),
                 onTap: () => ref
                     .read(gameControllerProvider.notifier)
@@ -124,7 +117,8 @@ class DebtsTab extends ConsumerWidget {
                   ),
                 ),
                 tileColor: AppTheme.slate.withValues(alpha: 0.9),
-                leading: const Icon(Icons.savings_outlined, color: AppTheme.moss),
+                leading:
+                    const Icon(Icons.savings_outlined, color: AppTheme.moss),
                 title: Text(d.name),
                 subtitle: Text(
                   '${currency.format(d.currentHp)} / ${currency.format(d.totalHp)}',
@@ -137,31 +131,11 @@ class DebtsTab extends ConsumerWidget {
             ),
           ),
         ],
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: FilledButton.tonal(
-                onPressed: () => showNewDragonSheet(context),
-                child: const Text('Hedef ekle'),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: OutlinedButton(
-                onPressed: () => showExpenseSheet(context),
-                child: const Text('Harcama yaz'),
-              ),
-            ),
-          ],
+        const SizedBox(height: 16),
+        FilledButton.tonal(
+          onPressed: () => showNewDragonSheet(context),
+          child: const Text('Hedef ekle'),
         ),
-        if (state.activeDebts.isNotEmpty) ...[
-          const SizedBox(height: 16),
-          BattlePlanPanel(
-            state: state,
-            onEditExtra: () => showExtraPaymentSheet(context),
-          ),
-        ],
       ],
     );
   }
