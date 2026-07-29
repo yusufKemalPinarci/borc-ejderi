@@ -5,30 +5,31 @@ alwaysApply: true
 
 # Oturum sürekliliği
 
-Tek kaynak: `agents/HANDOFF.md`. Uzun chat geçmişi yerine bunu kullan.
+Tek kaynak: `agents/HANDOFF.md`.  
+Yeni sohbet prompt şablonu: `agents/NEW_CHAT_PROMPT.md`.
 
 ## Yeni sohbet / belirsiz bağlam
 
 1. Önce `agents/HANDOFF.md` oku
-2. Gerekirse ilgili `agents/sessions/*.md` dosyasına bak
-3. Kullanıcıya uzun özet yapma; HANDOFF’taki “Sonraki adım” ile devam et
+2. Gerekirse `agents/sessions/*.md`
+3. “Sonraki adım” ile devam et; uzun chat özeti yapma
 
-## Ne zaman güncelle
+## Ne zaman güncelle (zorunlu)
 
-- Anlamlı bir özellik / karar bittiğinde
-- Kullanıcı “yeni sohbete geçiyorum”, “handoff yaz”, “özetle” dediğinde
-- Bağlam şişmeye başladıysa (çok dosya, uzun debug) — işi HANDOFF’a yazıp kısa tut
+- Anlamlı özellik / karar bittiğinde
+- Kullanıcı “yeni sohbete geçiyorum”, “handoff”, “özetle” dediğinde
+- Commit / APK / büyük UI değişikliği sonrası
+- Bağlam şişmeye başladıysa — önce HANDOFF yaz
 
 ## HANDOFF nasıl yazılır
 
-- Kısa tut (tercihen < 80 satır)
-- Tablo + maddeler; chat dökümü yapma
-- “Sonraki adım” tek net odak olsun
-- Commit edilmemiş önemli iş varsa belirt
-- Bitmiş sprint detayını `agents/sessions/YYYY-MM-DD-konu.md` olarak arşivle (`_TEMPLATE.md`)
+- < 80 satır; tablo + madde
+- Branch, son commit, sonraki **tek** odak
+- Chat dökümü yok
+- Bitmiş sprint → `agents/sessions/YYYY-MM-DD-konu.md`
 
 ## Yasak
 
-- Tüm konuşmayı HANDOFF’a yapıştırma
-- Her mikro değişiklikte güncelleme (gürültü)
-- HANDOFF olmadan “devam edelim” varsayımı (yeni sohbette önce oku)
+- HANDOFF güncellemeden “bitti” demek
+- Her mikro değişiklikte gürültü
+- Sosyal / banka sync / LLM / karmaşık şehir sim (kişisel sade ürün)
